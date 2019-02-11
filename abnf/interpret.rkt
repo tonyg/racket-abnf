@@ -126,11 +126,14 @@
                           ;; #"foo = %x20 %x20\r\n"
                           ;; (srcloc "adhoc" 1 0 1 #f)
 
-                          ;; (file->bytes "rfc5234-section-4.rktd")
-                          ;; (srcloc "rfc5234-section-4.rktd" 1 0 1 #f)
+                          (file->bytes "rfc5234-section-4.abnf")
+                          (srcloc "rfc5234-section-4.abnf" 1 0 1 #f)
 
-                          (file->bytes "rfc5322.abnf")
-                          (srcloc "rfc5322.abnf" 1 0 1 #f)
+                          ;; (file->bytes "rfc5234-appendix-b.abnf")
+                          ;; (srcloc "rfc5234-appendix-b.abnf" 1 0 1 #f)
+
+                          ;; (file->bytes "rfc5322.abnf")
+                          ;; (srcloc "rfc5322.abnf" 1 0 1 #f)
 
                           ))
     [(list (parse-error msg loc))
