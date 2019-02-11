@@ -3,10 +3,12 @@
 (require racket/match)
 (require bitsyntax)
 (require (only-in racket/promise force))
+(require (only-in racket/list append-map))
 
 (require (prefix-in : "ast.rkt"))
 (require (prefix-in abnf: "boot.rkt"))
 
+(struct parse-result (value input loc) #:prefab)
 (struct parse-error (message loc) #:prefab)
 
 (define (advance-string loc s)
@@ -38,113 +40,108 @@
 (define (srcloc->string* loc)
   (format "~a:~a:~a" (srcloc-line loc) (srcloc-column loc) (srcloc-position loc)))
 
-;; (define *indent* 0)
-;; (define (interpret ast input loc ks kf)
-;;   (printf "~a~a ~a\n"
-;;           (make-string *indent* #\space)
-;;           (srcloc->string* loc)
-;;           (let ((s (format "~v" ast)))
-;;             (if (> (string-length s) 50)
-;;                 (string-append (substring s 0 50) "...")
-;;                 s)))
-;;   (set! *indent* (+ *indent* 2))
-;;   (interpret* ast
-;;               input
-;;               loc
-;;               (lambda (r input loc)
-;;                 (printf "~a✓ ~v\n"
-;;                         (make-string *indent* #\space)
-;;                         r)
-;;                 (set! *indent* (- *indent* 2))
-;;                 (ks r input loc))
-;;               (lambda (e)
-;;                 (printf "~a✗ ~a ~a\n"
-;;                         (make-string *indent* #\space)
-;;                         (parse-error-message e)
-;;                         (srcloc->string* (parse-error-loc e)))
-;;                 (set! *indent* (- *indent* 2))
-;;                 (kf e))))
+(define (make-syntax v loc) v)
 
-(define (make-syntax v loc)
-  ;; (match-define (srcloc f l c p s) loc)
-  ;; (datum->syntax #f v (list f l c p s))
-  v
-  )
+(define (combine-results rs1 rs2)
+  (define errs1 (filter parse-error? rs1))
+  (define results1 (filter parse-result? rs1))
+  (define errs2 (filter parse-error? rs2))
+  (define results2 (filter parse-result? rs2))
+  (append (let ((errs (append errs1 errs2)))
+            (if (null? errs)
+                '()
+                (list (foldl merge-error (car errs) (cdr errs)))))
+          results1
+          results2))
 
-(define (interpret ast input loc ks kf)
+(define (>>= rs k)
+  (define old-errs (filter parse-error? rs))
+  (define old-results (filter parse-result? rs))
+  (define rs1 (append-map (match-lambda [(parse-result v i l) (k v i l)]) old-results))
+  (combine-results old-errs rs1))
+
+(define (succeed v i l)
+  (list (parse-result v i l)))
+
+(define (fail m l)
+  (list (parse-error m l)))
+
+(define (interpret ast input loc)
   (match ast
     [(:rule name item-promise)
-     (interpret (force item-promise)
-                input
-                loc
-                (lambda (r input loc)
-                  (ks (make-syntax (list name r) loc) input loc))
-                kf)]
+     (>>= (interpret (force item-promise) input loc)
+          (lambda (r input loc)
+            (succeed (make-syntax (list name r) loc) input loc)))]
     [(:repetition min max item)
      (define left-pos loc)
      (let loop ((results-rev '()) (input input) (loc loc) (count 0))
-       (define fault-pos loc)
-       (interpret item
-                  input
-                  loc
-                  (lambda (r input loc)
-                    (let ((count (+ count 1)))
-                      (if (or (not max) (<= count max))
-                          (loop (cons r results-rev) input loc count)
-                          (kf (parse-error "too many repetitions" fault-pos)))))
-                  (lambda (e)
-                    (if (< count min)
-                        (kf (parse-error "too few repetitions" fault-pos))
-                        (ks (make-syntax (list '* (reverse results-rev)) left-pos) input loc)))))]
+       (match (interpret item input loc)
+         [(list (? parse-error?))
+          (if (< count min)
+              (fail "too few repetitions" loc)
+              (succeed (make-syntax (list '* (reverse results-rev)) left-pos) input loc))]
+         [rs (>>= rs (lambda (r input loc)
+                       (let ((count (+ count 1)))
+                         (if (or (not max) (<= count max))
+                             (loop (cons r results-rev) input loc count)
+                             (fail "too many repetitions" loc)))))]))]
     [(:alternation items)
-     ;; TODO: parallel exploration.
-     (let loop ((items items) (best-e (parse-error "syntax error" loc)) (index 0))
+     (let loop ((items items) (index 0))
        (match items
-         ['() (kf best-e)]
-         [(cons item items) (interpret item
-                                       input
-                                       loc
-                                       (lambda (r input loc)
-                                         (ks (make-syntax (list '/ index r) loc) input loc))
-                                       (lambda (e)
-                                         (loop items (merge-error e best-e) (+ index 1))))]))]
+         ['() '()]
+         [(cons item items) (combine-results (>>= (interpret item input loc)
+                                                  (lambda (r input loc)
+                                                    (succeed (make-syntax (list '/ index r) loc)
+                                                             input
+                                                             loc)))
+                                             (loop items (+ index 1)))]))]
     [(:concatenation items)
      (define left-pos loc)
      (let loop ((results-rev '()) (items items) (input input) (loc loc))
        (match items
-         ['() (ks (make-syntax (cons ': (reverse results-rev)) left-pos) input loc)]
-         [(cons item items) (interpret item
-                                       input
-                                       loc
-                                       (lambda (r input loc)
-                                         (loop (cons r results-rev) items input loc))
-                                       kf)]))]
+         ['() (succeed (make-syntax (cons ': (reverse results-rev)) left-pos) input loc)]
+         [(cons item items) (>>= (interpret item input loc)
+                                 (lambda (r input loc)
+                                   (loop (cons r results-rev) items input loc)))]))]
     [(:char-val ci-str)
      (define-values (head0 tail) (bit-string-split-at-or-false input (* 8 (string-length ci-str))))
      (define head (and head0 (bytes->string/latin-1 (bit-string->bytes head0))))
      (if (and head (string-ci=? head ci-str))
-         (ks (make-syntax head loc) tail (advance-string loc head))
-         (kf (parse-error (format "expected ~v" ci-str) loc)))]
+         (succeed (make-syntax head loc) tail (advance-string loc head))
+         (fail (format "expected ~v" ci-str) loc))]
     [(:range lo hi)
      (bit-string-case input
        ([ head (tail :: binary) ]
         (if (<= lo head hi)
-            (ks (make-syntax head loc) tail (advance-byte loc head))
-            (kf (parse-error (format "input ~a out-of-range [~a-~a]" head lo hi) loc))))
-       (else (kf (parse-error "unexpected end of input" loc))))]))
+            (succeed (make-syntax head loc) tail (advance-byte loc head))
+            (fail (format "input ~a out-of-range [~a-~a]" head lo hi) loc)))
+       (else (fail "unexpected end of input" loc)))]))
 
 (module+ main
   (require racket/file)
   (require racket/pretty)
   (require "abnf-semantics.rkt")
   (match (time (interpret abnf:rulelist
-                          (file->bytes "rfc5234-section-4.rktd")
-                          (srcloc "rfc5234-section-4.rktd" 1 0 1 #f)
-                          list
-                          list))
-    [(list cst remaining loc)
+
+                          ;; #"foo = %x20 %x20\r\n"
+                          ;; (srcloc "adhoc" 1 0 1 #f)
+
+                          ;; (file->bytes "rfc5234-section-4.rktd")
+                          ;; (srcloc "rfc5234-section-4.rktd" 1 0 1 #f)
+
+                          (file->bytes "rfc5322.abnf")
+                          (srcloc "rfc5322.abnf" 1 0 1 #f)
+
+                          ))
+    [(list (parse-error msg loc))
+     (printf "SYNTAX ERROR\n~a\n~a\n"
+             msg
+             (srcloc->string* loc))]
+    [(list (? parse-error?) (parse-result cst remaining loc))
      (pretty-print (abnf-cst->ast cst))
      (pretty-print loc)
      (pretty-print (bit-string->bytes remaining))]
-    [(list err)
-     (printf "SYNTAX ERROR: ~a\n" err)]))
+    [other
+     (printf "AMBIGUOUS RESULT\n")
+     (pretty-print other)])
+  )
