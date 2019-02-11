@@ -34,31 +34,21 @@
 (define (make-syntax v loc) v)
 
 (define (combine-results rs1 rs2)
-  (define errs1 (filter parse-error? rs1))
-  (define results1 (filter parse-result? rs1))
-  (define errs2 (filter parse-error? rs2))
-  (define results2 (filter parse-result? rs2))
-  (append (let ((errs (append errs1 errs2)))
+  (append (let ((errs (append (filter parse-error? rs1) (filter parse-error? rs2))))
             (if (null? errs)
                 '()
                 (list (foldl merge-error (car errs) (cdr errs)))))
-          results1
-          results2))
+          (filter parse-result? rs1)
+          (filter parse-result? rs2)))
 
 (define (>>= rs k)
-  (define old-errs (filter parse-error? rs))
-  (define old-results (filter parse-result? rs))
-  (define rs1 (append-map (match-lambda [(parse-result v l) (k v l)]) old-results))
-  (combine-results old-errs rs1))
+  (define rs1 (append-map (match-lambda [(parse-result v l) (k v l)]) (filter parse-result? rs)))
+  (combine-results (filter parse-error? rs) rs1))
 
-(define (succeed v l)
-  (list (parse-result v l)))
+(define (succeed v l) (list (parse-result v l)))
+(define (fail m l) (list (parse-error m l)))
 
-(define (fail m l)
-  (list (parse-error m l)))
-
-(define (loc->index loc)
-  (- (srcloc-position loc) 1))
+(define (loc->index loc) (- (srcloc-position loc) 1))
 
 (define (interpret ast input loc)
   (define input-length (bytes-length input))
@@ -106,7 +96,7 @@
            (fail (format "expected ~v" ci-str) loc))]
       [(:range lo hi)
        (define i (loc->index loc))
-       (define head (and (< i input-length) (bytes-ref input (loc->index loc))))
+       (define head (and (< i input-length) (bytes-ref input i)))
        (if (and head (<= lo head hi))
            (succeed (make-syntax head loc) (advance-byte loc head))
            (fail (format "input ~a out-of-range [~a-~a]" head lo hi) loc))]))
