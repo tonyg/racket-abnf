@@ -41,7 +41,8 @@
       [`(char-val (: ,_ ,v ,_)) (:char-val (text v))]
       [`(num-val (: "%" ,v)) (walk v)]
 
-      [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ()))) (val base digits0)]
+      [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ())))
+       (:range (val base digits0) (val base digits0))]
       [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0
                                              (* ((/ 0 (* ((: "." ,digitsNs) ...)))))))
        (:concatenation (cons (val base digits0)
