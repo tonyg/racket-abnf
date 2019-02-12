@@ -1,7 +1,7 @@
 #lang racket/base
 
 (require racket/match)
-(require (only-in racket/list append-map))
+(require (only-in racket/list append*))
 
 (require (prefix-in : "ast.rkt"))
 (require (prefix-in abnf: "boot.rkt"))
@@ -23,80 +23,86 @@
 
 (define (make-syntax v loc) v)
 
-(define (combine-results rs1 rs2)
-  (append (let ((errs (append (filter parse-error? rs1) (filter parse-error? rs2))))
-            (if (null? errs)
-                '()
-                (list (foldl merge-error (car errs) (cdr errs)))))
-          (filter parse-result? rs1)
-          (filter parse-result? rs2)))
+(define (combine err0 rss)
+  (define-values (err results)
+    (for/fold [(err err0) (results '())] [(rs (in-list rss))]
+      (for/fold [(err err) (results results)] [(r (in-list rs))]
+        (match r
+          [(? parse-error? e) (values (merge-error err e) results)]
+          [(? parse-result? r) (values err (cons r results))]))))
+  (cons err results))
 
-(define (>>= rs k)
-  (define rs1 (append-map (match-lambda [(parse-result v l) (k v l)]) (filter parse-result? rs)))
-  (combine-results (filter parse-error? rs) rs1))
+(define no-error (parse-error "no error" -1))
 
-(define (succeed v l) (list (parse-result v l)))
+(define (succeed v l) (list no-error (parse-result v l)))
 (define (fail m l) (list (parse-error m l)))
 
 (define (loc->index loc) loc)
 
 (define (interpret env ast input source-name)
   (define input-length (bytes-length input))
-  (define (walk ast loc)
+  (define (walk ast loc ks kf)
+    (define left-pos loc)
     (match ast
       [(:reference name)
        (define item
          (hash-ref env name (lambda () (error 'interpret "Nonexistent ABNF rule: ~v" name))))
-       (>>= (walk item loc) (lambda (r loc) (succeed (make-syntax (list name r) loc) loc)))]
+       (walk item loc
+             (lambda (r loc) (ks (make-syntax (list name r) loc) loc))
+             kf)]
       [(:repetition min max item)
-       (define left-pos loc)
        (let loop ((results-rev '()) (loc loc) (count 0))
-         (match (walk item loc)
-           [(list (? parse-error?))
-            (if (< count min)
-                (fail "too few repetitions" loc)
-                (succeed (make-syntax (list '* (reverse results-rev)) left-pos) loc))]
-           [rs (>>= rs (lambda (r loc)
-                         (let ((count (+ count 1)))
-                           (if (or (not max) (<= count max))
-                               (loop (cons r results-rev) loc count)
-                               (fail "too many repetitions" loc)))))]))]
+         (define item-loc loc)
+         (walk item item-loc
+               (lambda (r loc)
+                 (let ((count (+ count 1)))
+                   (if (or (not max) (<= count max))
+                       (loop (cons r results-rev) loc count)
+                       (kf "too many repetitions" item-loc))))
+               (lambda (msg loc)
+                 (if (< count min)
+                     (kf msg loc)
+                     (ks (make-syntax (list '* (reverse results-rev)) left-pos) item-loc)))))]
       [(:alternation items)
-       (let loop ((items items) (index 0))
-         (match items
-           ['() '()]
-           [(cons item items) (combine-results (>>= (walk item loc)
-                                                    (lambda (r loc)
-                                                      (succeed (make-syntax (list '/ index r) loc)
-                                                               loc)))
-                                               (loop items (+ index 1)))]))]
+       (match (combine no-error
+                       (for/list [(item (in-list items)) (index (in-naturals))]
+                         (walk item left-pos
+                               (lambda (r loc)
+                                 (succeed (make-syntax (list '/ index r) left-pos) loc))
+                               fail)))
+         [(list (parse-error msg loc)) (kf msg loc)]
+         [(list e results ...) (combine e
+                                        (for/list [(r (in-list results))]
+                                          (match-define (parse-result value loc) r)
+                                          (ks value loc)))])]
       [(:concatenation items)
        (define left-pos loc)
        (let loop ((results-rev '()) (items items) (loc loc))
          (match items
-           ['() (succeed (make-syntax (cons ': (reverse results-rev)) left-pos) loc)]
-           [(cons item items) (>>= (walk item loc)
-                                   (lambda (r loc)
-                                     (loop (cons r results-rev) items loc)))]))]
+           ['()
+            (ks (make-syntax (cons ': (reverse results-rev)) left-pos) loc)]
+           [(cons item items)
+            (walk item loc
+                  (lambda (r loc) (loop (cons r results-rev) items loc))
+                  kf)]))]
       [(:char-val ci-str)
        (define i (loc->index loc))
        (define j (+ i (string-length ci-str)))
        (define head (and (<= j input-length) (bytes->string/latin-1 (subbytes input i j))))
        (if (and head (string-ci=? head ci-str))
-           (succeed (make-syntax head loc) (advance-string loc head))
-           (fail (format "expected ~v" ci-str) loc))]
+           (ks (make-syntax head loc) (advance-string loc head))
+           (kf (format "expected ~v" ci-str) loc))]
       [(:range lo hi)
        (define i (loc->index loc))
        (define head (and (< i input-length) (bytes-ref input i)))
        (if (and head (<= lo head hi))
-           (succeed (make-syntax head loc) (advance-byte loc head))
-           (fail (format "input ~a out-of-range [~a-~a]" head lo hi) loc))]))
+           (ks (make-syntax head loc) (advance-byte loc head))
+           (kf (format "input ~a out-of-range [~a-~a]" head lo hi) loc))]))
   ;; TODO: Work out a sensible reply format. Discard incomplete
   ;; parses? etc. TODO: Is it possible for an alternative parse to be
   ;; incomplete, alongside a complete alternative?
-  (match (walk ast 0)
-    [(list (? parse-error? e))
-     e]
+  (match (walk ast 0 succeed fail)
+    [(list (? parse-error? e)) e]
     [(list (? parse-error? e) (and r (parse-result _ loc)))
      (if (= (loc->index loc) input-length)
          r
