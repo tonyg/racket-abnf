@@ -7,9 +7,6 @@
 
 (require (prefix-in : "ast.rkt"))
 
-(struct definition (name type body) #:prefab)
-(struct reference (name) #:prefab)
-
 (define (abnf-cst->ast ast)
   (define (walk ast)
     (match ast
@@ -17,11 +14,11 @@
       [`(: ,@vs) (map walk vs)]
       [`(* ,vs) (map walk vs)]
 
-      [`(rulelist ,items) (walk items)]
-      [`(rule (: (rulename ,n) ,d ,e ,_)) (definition (string->symbol (text n)) (walk d) (walk e))]
-      [`(rulename ,n) (reference (string->symbol (text n)))]
-      [`(defined-as (: ,_ (/ 0 ,_) ,_)) 'define]
-      [`(defined-as (: ,_ (/ 1 ,_) ,_)) 'extend]
+      [`(rulelist ,items) (:rulelist (flatten (walk items)))]
+      [`(rule (: (rulename ,n) ,d ,e ,_)) (:rule (string->symbol (text n)) (walk d) (walk e))]
+      [`(rulename ,n) (:reference (string->symbol (text n)))]
+      [`(defined-as (: ,_ (/ 0 ,_) ,_)) #f]
+      [`(defined-as (: ,_ (/ 1 ,_) ,_)) #t]
       [`(elements (: ,a ,_)) (walk a)]
       [`(alternation (: ,c0 (* ()))) (walk c0)]
       [`(alternation (: ,c0 (* ((: ,_ "/" ,_ ,cs) ...))))
@@ -64,4 +61,4 @@
   (define (val base digits-ast)
     (string->number (format "#~a~a" base (text digits-ast))))
 
-  (flatten (time (walk ast))))
+  (time (walk ast)))

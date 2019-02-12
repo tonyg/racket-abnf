@@ -1,7 +1,6 @@
 #lang racket/base
 
 (require racket/match)
-(require (only-in racket/promise force))
 (require (only-in racket/list append-map))
 
 (require (prefix-in : "ast.rkt"))
@@ -50,13 +49,14 @@
 
 (define (loc->index loc) (- (srcloc-position loc) 1))
 
-(define (interpret ast input loc)
+(define (interpret env ast input loc)
   (define input-length (bytes-length input))
   (define (walk ast loc)
     (match ast
-      [(:rule name item-promise)
-       (>>= (walk (force item-promise) loc)
-            (lambda (r loc) (succeed (make-syntax (list name r) loc) loc)))]
+      [(:reference name)
+       (define item
+         (hash-ref env name (lambda () (error 'interpret "Nonexistent ABNF rule: ~v" name))))
+       (>>= (walk item loc) (lambda (r loc) (succeed (make-syntax (list name r) loc) loc)))]
       [(:repetition min max item)
        (define left-pos loc)
        (let loop ((results-rev '()) (loc loc) (count 0))
@@ -116,19 +116,20 @@
   (require racket/file)
   (require racket/pretty)
   (require "abnf-semantics.rkt")
-  (match (time (interpret abnf:rulelist
+  (match (time (interpret (:rulelist->hash abnf:rulelist)
+                          (:reference 'rulelist)
 
                           ;; #"foo = %x20 %x20\r\n"
                           ;; (srcloc "adhoc" 1 0 1 #f)
 
-                          (file->bytes "rfc5234-section-4.abnf")
-                          (srcloc "rfc5234-section-4.abnf" 1 0 1 #f)
+                          ;; (file->bytes "rfc5234-section-4.abnf")
+                          ;; (srcloc "rfc5234-section-4.abnf" 1 0 1 #f)
 
                           ;; (file->bytes "rfc5234-appendix-b.abnf")
                           ;; (srcloc "rfc5234-appendix-b.abnf" 1 0 1 #f)
 
-                          ;; (file->bytes "rfc5322.abnf")
-                          ;; (srcloc "rfc5322.abnf" 1 0 1 #f)
+                          (file->bytes "rfc5322.abnf")
+                          (srcloc "rfc5322.abnf" 1 0 1 #f)
 
                           ))
     [(parse-error msg loc)
