@@ -9,26 +9,17 @@
 (struct parse-result (value loc) #:prefab)
 (struct parse-error (message loc) #:prefab)
 
-(define (advance-string loc s)
-  (for/fold [(loc loc)] [(c (in-string s))]
-    (advance-byte loc (char->integer c))))
-
-(define (advance-byte loc c)
-  (let ((loc (struct-copy srcloc loc [position (+ (srcloc-position loc) 1)])))
-    (match c
-      [#x0d (struct-copy srcloc loc [column 0])]
-      [#x0a (struct-copy srcloc loc [column 0] [line (+ (srcloc-line loc) 1)])]
-      [#x09 (let ((col (srcloc-column loc)))
-              (struct-copy srcloc loc [column (+ col (- 8 (remainder col 8)))]))]
-      [_ (struct-copy srcloc loc [column (+ (srcloc-column loc) 1)])])))
+(define (advance-string loc s) (+ loc (string-length s)))
+(define (advance-byte loc c) (+ loc 1))
 
 (define (merge-error e1 e2)
-  (if (>= (srcloc-position (parse-error-loc e1)) (srcloc-position (parse-error-loc e2)))
-      e1
-      e2))
+  (if (>= (parse-error-loc e1) (parse-error-loc e2)) e1 e2))
 
-(define (srcloc->string* loc)
-  (format "~a:~a:~a" (srcloc-line loc) (srcloc-column loc) (srcloc-position loc)))
+(define (srcloc->string* loc input)
+  ;; (local-require (only-in racket/string string-split))
+  ;; (bytes->string/latin-1 (subbytes input 0 loc))
+  ;; TODO: count line/column
+  (format "~a" loc))
 
 (define (make-syntax v loc) v)
 
@@ -47,9 +38,9 @@
 (define (succeed v l) (list (parse-result v l)))
 (define (fail m l) (list (parse-error m l)))
 
-(define (loc->index loc) (- (srcloc-position loc) 1))
+(define (loc->index loc) loc)
 
-(define (interpret env ast input loc)
+(define (interpret env ast input source-name)
   (define input-length (bytes-length input))
   (define (walk ast loc)
     (match ast
@@ -103,7 +94,7 @@
   ;; TODO: Work out a sensible reply format. Discard incomplete
   ;; parses? etc. TODO: Is it possible for an alternative parse to be
   ;; incomplete, alongside a complete alternative?
-  (match (walk ast loc)
+  (match (walk ast 0)
     [(list (? parse-error? e))
      e]
     [(list (? parse-error? e) (and r (parse-result _ loc)))
@@ -116,26 +107,29 @@
   (require racket/file)
   (require racket/pretty)
   (require "abnf-semantics.rkt")
+  (define-values (input source-name) (values
+
+                                      ;; #"foo = %x20 %x20\r\n"
+                                      ;; "adhoc"
+
+                                      ;; (file->bytes "rfc5234-section-4.abnf")
+                                      ;; "rfc5234-section-4.abnf"
+
+                                      ;; (file->bytes "rfc5234-appendix-b.abnf")
+                                      ;; "rfc5234-appendix-b.abnf"
+
+                                      (file->bytes "rfc5322.abnf")
+                                      "rfc5322.abnf"
+
+                                      ))
   (match (time (interpret (:rulelist->hash abnf:rulelist)
                           (:reference 'rulelist)
-
-                          ;; #"foo = %x20 %x20\r\n"
-                          ;; (srcloc "adhoc" 1 0 1 #f)
-
-                          ;; (file->bytes "rfc5234-section-4.abnf")
-                          ;; (srcloc "rfc5234-section-4.abnf" 1 0 1 #f)
-
-                          ;; (file->bytes "rfc5234-appendix-b.abnf")
-                          ;; (srcloc "rfc5234-appendix-b.abnf" 1 0 1 #f)
-
-                          (file->bytes "rfc5322.abnf")
-                          (srcloc "rfc5322.abnf" 1 0 1 #f)
-
-                          ))
+                          input
+                          source-name))
     [(parse-error msg loc)
      (printf "SYNTAX ERROR\n~a\n~a\n"
              msg
-             (srcloc->string* loc))]
+             (srcloc->string* loc input))]
     [(parse-result cst loc)
      (pretty-print (abnf-cst->ast cst))]
     [other
