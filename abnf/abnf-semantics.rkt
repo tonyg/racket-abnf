@@ -35,7 +35,7 @@
                                            (string->number (text w)))]
       [`(element ,item) (walk item)]
       [`(group (: "(" ,_ ,a ,_ ")")) (walk a)]
-      [`(option (: "[" ,_ ,a ,_ "]")) (walk a)]
+      [`(option (: "[" ,_ ,a ,_ "]")) (:repetition 0 1 (walk a))]
       [`(c-wsp ,_) '()]
       [`(c-nl ,_) '()]
       [`(char-val (: ,_ ,v ,_)) (:char-val (text v))]
