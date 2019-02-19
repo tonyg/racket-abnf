@@ -1,42 +1,68 @@
 #lang racket/base
 
+(provide compile-rulelist)
+
 (require racket/match)
 (require (only-in racket/list append-map))
 
+(require (for-template racket/base))
+(require (for-template racket/match))
+(require (for-template "runtime.rkt"))
+
 (require (prefix-in : "ast.rkt"))
-(require (prefix-in abnf: "boot.rkt"))
 
 (define (make-syntax val-exp loc-exp)
   val-exp)
+
+(define (rule-id name)
+  (string->symbol (format "%%~a" name)))
 
 (define (compile env ast ks kf)
   (define (walk ast ks kf)
     (define left-pos (gensym 'left-pos))
     (match ast
       [(:reference name)
-       (when (not (hash-has-key? env name))
-         (error 'compile "Nonexistent ABNF rule: ~v" name))
-       `(,name input loc ,ks ,kf)]
+       `(,(rule-id name) input loc ,ks ,kf)]
       [(:repetition min max item)
        (define item-loc (gensym 'item-loc))
        (define results-rev (gensym 'results-rev))
        (define count (gensym 'count))
+       (define loop (gensym 'repetition-loop))
        `(let ((,left-pos loc))
-          (let loop ((,results-rev '()) (loc loc) (,count 0))
+          (let ,loop ((,results-rev '()) (loc loc) (,count 0))
             (define ,item-loc loc)
             ,(walk item
                    `(lambda (r loc)
                       (let ((,count (+ ,count 1)))
                         ,(if (not max)
-                             `(loop (cons r ,results-rev) loc ,count)
-                             `(if (<= count max)
-                                  (loop (cons r ,results-rev) loc ,count)
+                             `(,loop (cons r ,results-rev) loc ,count)
+                             `(if (<= ,count ,max)
+                                  (,loop (cons r ,results-rev) loc ,count)
                                   (,kf "too many repetitions" ,item-loc)))))
                    `(lambda (msg loc)
-                      (if (< ,count min)
-                          (,kf msg loc)
-                          (,ks ,(make-syntax `(list '* (reverse ,results-rev)) left-pos)
-                               ,item-loc))))))]
+                      ,(let ((continue
+                              `(,ks ,(make-syntax `(list '* (reverse ,results-rev)) left-pos)
+                                    ,item-loc)))
+                         (if (zero? min)
+                             continue
+                             `(if (< ,count ,min)
+                                  (,kf msg loc)
+                                  ,continue)))))))]
+      [(:biased-choice items)
+       (define err (gensym 'err))
+       `(let ((,left-pos loc) (,err no-error))
+          ,(let loop ((items items) (index 0))
+             (match items
+               ['()
+                `(match ,err [(parse-error msg loc) (,kf msg loc)])]
+               [(cons item items)
+                (walk item
+                      `(lambda (r loc)
+                         (,ks ,(make-syntax `(list '/ ,index r) left-pos) loc))
+                      `(lambda (msg loc)
+                         (let* ((,err (merge-error ,err (parse-error msg loc)))
+                                (loc ,left-pos))
+                           ,(loop items (+ index 1)))))])))]
       [(:alternation items)
        `(let ((,left-pos loc))
           (match (combine no-error
@@ -63,17 +89,13 @@
                         `(lambda (,r loc) ,(loop (cons r results-rev) items)))
                       kf)])))]
       [(:char-val ci-str)
-       `(let* ((i loc)
-               (j (+ i ,(string-length ci-str)))
-               (head (and (<= j (bytes-length input))
-                          (bytes->string/latin-1 (subbytes input i j)))))
+       (define count (string-length ci-str))
+       `(let ((head (input-substring input loc ,count)))
           (if (and head (string-ci=? head ,ci-str))
-              (,ks ,(make-syntax `head `loc) (+ loc ,(string-length ci-str)))
+              (,ks ,(make-syntax `head `loc) (+ loc ,count))
               (,kf ,(format "expected ~v" ci-str) loc)))]
       [(:range lo hi)
-       `(let* ((i loc)
-               (head (and (< i (bytes-length input))
-                          (bytes-ref input i))))
+       `(let ((head (input-byte input loc)))
           (if (and head (<= ,lo head ,hi))
               (,ks ,(make-syntax `head `loc) (+ loc 1))
               (,kf (format "input ~a out-of-range [~a-~a]" head ,lo ,hi) loc)))]))
@@ -81,16 +103,32 @@
 
 (define (compile-rulelist rulelist)
   (define env (:rulelist->hash rulelist))
-  `(module DUMMY racket/base
-     (provide ,@(hash-keys env))
-     ,@(for/list [((name ast) (in-hash env))]
-         `(define (,name input loc0 ks kf)
-            (let ((loc loc0))
-              ,(compile env ast
-                        `(lambda (r loc1) (ks ,(make-syntax `(list ',name r) `loc0) loc1))
-                        `kf))))))
-
-(module+ main
-  (require racket/file)
-  (require racket/pretty)
-  (pretty-print (compile-rulelist abnf:rulelist)))
+  #`(begin
+      #,@(for/list [(m (in-list (:rulelist->metas rulelist)))]
+           (match m
+             [`(require ,@spec)
+              `(require ,@(for/list [(s spec)] `(prefix-in %% ,s)))]
+             [other
+              other]))
+      (provide %rulelist)
+      (define %rulelist '#,rulelist)
+      (provide #,@(for/list [(n (in-hash-keys env))]
+                    #`(rename-out [#,(rule-id n) #,n])))
+      #,@(for/list [((name ast) (in-hash env))]
+           #`(define (#,(rule-id name) input [loc0 0] [ks succeed] [kf fail])
+               (let ((loc loc0)
+                     ;; (saved (unbox *nonterminal-stack*))
+                     )
+                 ;; (set-box! *nonterminal-stack* (cons (cons '#,name loc) saved))
+                 ;; (printf "\n  ~a ~a ~a"
+                 ;;         (current-milliseconds)
+                 ;;         loc
+                 ;;         (reverse (unbox *nonterminal-stack*)))
+                 ;; (flush-output)
+                 #,(compile env ast
+                            #`(lambda (r loc1)
+                                ;; (set-box! *nonterminal-stack* saved)
+                                (ks #,(make-syntax #`(list '#,name r) #`loc0) loc1))
+                            #`(lambda (msg loc1)
+                                ;; (set-box! *nonterminal-stack* saved)
+                                (kf msg loc1))))))))

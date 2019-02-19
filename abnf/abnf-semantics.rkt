@@ -4,6 +4,7 @@
 
 (require racket/match)
 (require (only-in racket/list flatten))
+(require (only-in racket/port with-input-from-string port->list))
 
 (require (prefix-in : "ast.rkt"))
 
@@ -20,6 +21,9 @@
       [`(defined-as (: ,_ (/ 0 ,_) ,_)) #f]
       [`(defined-as (: ,_ (/ 1 ,_) ,_)) #t]
       [`(elements (: ,a ,_)) (walk a)]
+      [`(biased-choice (: ,c0 (* ()))) (walk c0)]
+      [`(biased-choice (: ,c0 (* ((: ,_ "//" ,_ ,cs) ...))))
+       (:biased-choice (flatten (map walk (cons c0 cs))))]
       [`(alternation (: ,c0 (* ()))) (walk c0)]
       [`(alternation (: ,c0 (* ((: ,_ "/" ,_ ,cs) ...))))
        (:alternation (flatten (map walk (cons c0 cs))))]
@@ -37,6 +41,7 @@
       [`(c-nl ,_) '()]
       [`(char-val (: ,_ ,v ,_)) (:char-val (text v))]
       [`(num-val (: "%" ,v)) (walk v)]
+      [`(meta (: "@" ,v ,_)) (:meta (with-input-from-string (text v) port->list))]
 
       [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ())))
        (:range (val base digits0) (val base digits0))]
@@ -50,6 +55,9 @@
       [`(ALPHA (/ ,_ ,n)) (integer->char n)]
       [`(DIGIT ,n) (integer->char n)]
       [`(HEXDIG ,n) (walk n)]
+      [`(VCHAR ,n) (integer->char n)]
+      [`(WSP ,v) (walk v)]
+      [`(SP ,n) (integer->char n)]
       [(? string? s) (string->list s)]
       [(? number? n) (integer->char n)]
       [`() '()]
@@ -61,4 +69,4 @@
   (define (val base digits-ast)
     (string->number (format "#~a~a" base (text digits-ast))))
 
-  (time (walk ast)))
+  (walk ast))

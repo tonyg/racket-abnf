@@ -1,7 +1,15 @@
+#lang abnf
 ;; From https://tools.ietf.org/html/rfc5234 section 4.
-;; Modified to accept LF as well as CRLF, and to admit leading newlines.
+;; Modified:
+;;  - to accept LF as well as CRLF,
+;;  - to admit leading newlines,
+;;  - to take '#' as an additional comment-marker,
+;;  - to allow @-prefixed single-line Racket forms, and
+;;  - to add '//' as a biased-choice operator.
 
-rulelist       =  1*( rule / (*c-wsp c-nl) )
+@require "rfc5234-appendix-b.abnf"
+
+rulelist       =  1*( rule / meta / (*c-wsp c-nl) )
 
 rule           =  rulename defined-as elements c-nl
                        ; continues if next line starts
@@ -13,14 +21,17 @@ defined-as     =  *c-wsp ("=" / "=/") *c-wsp
                        ; basic rules definition and
                        ;  incremental alternatives
 
-elements       =  alternation *c-wsp
+elements       =  biased-choice *c-wsp
 
 c-wsp          =  WSP / (c-nl WSP)
 
 c-nl           =  comment / CRLF / LF
                        ; comment or newline
 
-comment        =  ";" *(WSP / VCHAR) (CRLF / LF)
+comment        =  (";" / "#") *(WSP / VCHAR) (CRLF / LF)
+
+biased-choice  =  alternation
+                  *(*c-wsp "//" *c-wsp alternation)
 
 alternation    =  concatenation
                   *(*c-wsp "/" *c-wsp concatenation)
@@ -34,9 +45,9 @@ repeat         =  1*DIGIT / (*DIGIT "*" *DIGIT)
 element        =  rulename / group / option /
                   char-val / num-val / prose-val
 
-group          =  "(" *c-wsp alternation *c-wsp ")"
+group          =  "(" *c-wsp biased-choice *c-wsp ")"
 
-option         =  "[" *c-wsp alternation *c-wsp "]"
+option         =  "[" *c-wsp biased-choice *c-wsp "]"
 
 char-val       =  DQUOTE *(%x20-21 / %x23-7E) DQUOTE
                        ; quoted string of SP and VCHAR
@@ -60,3 +71,5 @@ prose-val      =  "<" *(%x20-3D / %x3F-7E) ">"
                        ;  without angles
                        ; prose description, to be used as
                        ;  last resort
+
+meta           = "@" *(WSP / VCHAR) (CRLF / LF)

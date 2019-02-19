@@ -1,13 +1,16 @@
+#lang abnf
 ;; From https://tools.ietf.org/html/rfc5322
 
-quoted-pair     =   ("\" (VCHAR / WSP)) / obs-qp
+@require "rfc5234-appendix-b.abnf"
 
-FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
+quoted-pair     =   ("\" (VCHAR / WSP)) // obs-qp
+
+FWS             =   ([*WSP CRLF] 1*WSP) //  obs-FWS
                                        ; Folding white space
 
 ctext           =   %d33-39 /          ; Printable US-ASCII
                     %d42-91 /          ;  characters not including
-                    %d93-126 /         ;  "(", ")", or "\"
+                    %d93-126 //        ;  "(", ")", or "\"
                     obs-ctext
 
 ccontent        =   ctext / quoted-pair / comment
@@ -44,7 +47,7 @@ specials        =   "(" / ")" /        ; Special characters that do
 
 qtext           =   %d33 /             ; Printable US-ASCII
                     %d35-91 /          ;  characters not including
-                    %d93-126 /         ;  "\" or the quote character
+                    %d93-126 //        ;  "\" or the quote character
                     obs-qtext
 
 qcontent        =   qtext / quoted-pair
@@ -55,38 +58,38 @@ quoted-string   =   [CFWS]
 
 word            =   atom / quoted-string
 
-phrase          =   1*word / obs-phrase
+phrase          =   1*word // obs-phrase
 
-unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
+unstructured    =   (*([FWS] VCHAR) *WSP) // obs-unstruct
 
 date-time       =   [ day-of-week "," ] date time [CFWS]
 
-day-of-week     =   ([FWS] day-name) / obs-day-of-week
+day-of-week     =   ([FWS] day-name) // obs-day-of-week
 
 day-name        =   "Mon" / "Tue" / "Wed" / "Thu" /
                     "Fri" / "Sat" / "Sun"
 
 date            =   day month year
 
-day             =   ([FWS] 1*2DIGIT FWS) / obs-day
+day             =   ([FWS] 1*2DIGIT FWS) // obs-day
 
 month           =   "Jan" / "Feb" / "Mar" / "Apr" /
                     "May" / "Jun" / "Jul" / "Aug" /
                     "Sep" / "Oct" / "Nov" / "Dec"
 
-year            =   (FWS 4*DIGIT FWS) / obs-year
+year            =   (FWS 4*DIGIT FWS) // obs-year
 
 time            =   time-of-day zone
 
 time-of-day     =   hour ":" minute [ ":" second ]
 
-hour            =   2DIGIT / obs-hour
+hour            =   2DIGIT // obs-hour
 
-minute          =   2DIGIT / obs-minute
+minute          =   2DIGIT // obs-minute
 
-second          =   2DIGIT / obs-second
+second          =   2DIGIT // obs-second
 
-zone            =   (FWS ( "+" / "-" ) 4DIGIT) / obs-zone
+zone            =   (FWS ( "+" / "-" ) 4DIGIT) // obs-zone
 
 address         =   mailbox / group
 
@@ -94,51 +97,50 @@ mailbox         =   name-addr / addr-spec
 
 name-addr       =   [display-name] angle-addr
 
-angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] /
+angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] //
                     obs-angle-addr
 
 group           =   display-name ":" [group-list] ";" [CFWS]
 
 display-name    =   phrase
 
-mailbox-list    =   (mailbox *("," mailbox)) / obs-mbox-list
+mailbox-list    =   (mailbox *("," mailbox)) // obs-mbox-list
 
-address-list    =   (address *("," address)) / obs-addr-list
+address-list    =   (address *("," address)) // obs-addr-list
 
-group-list      =   mailbox-list / CFWS / obs-group-list
+group-list      =   mailbox-list / CFWS // obs-group-list
 
 addr-spec       =   local-part "@" domain
 
-local-part      =   dot-atom / quoted-string / obs-local-part
+local-part      =   dot-atom / quoted-string // obs-local-part
 
-domain          =   dot-atom / domain-literal / obs-domain
+domain          =   dot-atom / domain-literal // obs-domain
 
 domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
 
 dtext           =   %d33-90 /          ; Printable US-ASCII
-                    %d94-126 /         ;  characters not including
+                    %d94-126 //        ;  characters not including
                     obs-dtext          ;  "[", "]", or "\"
 
-message         =   (fields / obs-fields)
+message         =   (fields // obs-fields)
                     [CRLF body]
 
-body            =   (*(*998text CRLF) *998text) / obs-body
+body            =   (*(*998text CRLF) *998text) // obs-body
 
 text            =   %d1-9 /            ; Characters excluding CR
                     %d11 /             ;  and LF
                     %d12 /
                     %d14-127
 
-fields          =   *(trace
-                      *optional-field /
-                      *(resent-date /
-                       resent-from /
-                       resent-sender /
-                       resent-to /
-                       resent-cc /
-                       resent-bcc /
-                       resent-msg-id))
-                    *(orig-date /
+;; The RFC 5322 definition includes too much alternation ambiguity in
+;; the name of enforcing the block structure it recommends. Here, we
+;; flatten the definition of the `fields` nonterminal. The original
+;; definition follows (commented out). Compare and contrast with the
+;; definition of `obs-fields`.
+;;
+fields          =   *(return /
+                    received /
+                    orig-date /
                     from /
                     sender /
                     reply-to /
@@ -151,7 +153,38 @@ fields          =   *(trace
                     subject /
                     comments /
                     keywords /
+                    resent-date /
+                    resent-from /
+                    resent-sender /
+                    resent-to /
+                    resent-cc /
+                    resent-bcc /
+                    resent-msg-id //
                     optional-field)
+
+; fields          =   *(trace
+;                       *optional-field /
+;                       *(resent-date /
+;                        resent-from /
+;                        resent-sender /
+;                        resent-to /
+;                        resent-cc /
+;                        resent-bcc /
+;                        resent-msg-id))
+;                     *(orig-date /
+;                     from /
+;                     sender /
+;                     reply-to /
+;                     to /
+;                     cc /
+;                     bcc /
+;                     message-id /
+;                     in-reply-to /
+;                     references /
+;                     subject /
+;                     comments /
+;                     keywords //
+;                     optional-field)
 
 ; +----------------+--------+------------+----------------------------+
 ; | Field          | Min    | Max number | Notes                      |
@@ -213,9 +246,9 @@ references      =   "References:" 1*msg-id CRLF
 
 msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
 
-id-left         =   dot-atom-text / obs-id-left
+id-left         =   dot-atom-text // obs-id-left
 
-id-right        =   dot-atom-text / no-fold-literal / obs-id-right
+id-right        =   dot-atom-text / no-fold-literal // obs-id-right
 
 no-fold-literal =   "[" *dtext "]"
 
@@ -348,7 +381,7 @@ obs-fields      =   *(obs-return /
                     obs-resent-to /
                     obs-resent-cc /
                     obs-resent-bcc /
-                    obs-resent-mid /
+                    obs-resent-mid //
                     obs-optional)
 
 obs-orig-date   =   "Date" *WSP ":" date-time CRLF
