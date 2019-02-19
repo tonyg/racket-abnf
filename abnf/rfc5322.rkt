@@ -1,7 +1,7 @@
 #lang abnf
 ;; From https://tools.ietf.org/html/rfc5322
 
-@require "rfc5234-appendix-b.abnf"
+@require "rfc5234-appendix-b.rkt"
 
 quoted-pair     =   ("\" (VCHAR / WSP)) // obs-qp
 

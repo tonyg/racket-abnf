@@ -105,14 +105,14 @@
                                       ;; #"foo = %x20 %x20\r\n"
                                       ;; "adhoc"
 
-                                      ;; (file->bytes "rfc5234-section-4.abnf")
-                                      ;; "rfc5234-section-4.abnf"
+                                      ;; (file->bytes "rfc5234-section-4.rkt")
+                                      ;; "rfc5234-section-4.rkt"
 
-                                      ;; (file->bytes "rfc5234-appendix-b.abnf")
-                                      ;; "rfc5234-appendix-b.abnf"
+                                      ;; (file->bytes "rfc5234-appendix-b.rkt")
+                                      ;; "rfc5234-appendix-b.rkt"
 
-                                      (file->bytes "rfc5322.abnf")
-                                      "rfc5322.abnf"
+                                      (file->bytes "rfc5322.rkt")
+                                      "rfc5322.rkt"
 
                                       ))
   (analyze-parser-results ((rulelist->parser abnf:rulelist 'rulelist) input)
