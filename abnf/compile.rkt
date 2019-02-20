@@ -116,19 +116,35 @@
                     #`(rename-out [#,(rule-id n) #,n])))
       #,@(for/list [((name ast) (in-hash env))]
            #`(define (#,(rule-id name) input [loc0 0] [ks succeed] [kf fail])
-               (let ((loc loc0)
-                     ;; (saved (unbox *nonterminal-stack*))
-                     )
-                 ;; (set-box! *nonterminal-stack* (cons (cons '#,name loc) saved))
-                 ;; (printf "\n  ~a ~a ~a"
-                 ;;         (current-milliseconds)
-                 ;;         loc
-                 ;;         (reverse (unbox *nonterminal-stack*)))
-                 ;; (flush-output)
-                 #,(compile env ast
-                            #`(lambda (r loc1)
-                                ;; (set-box! *nonterminal-stack* saved)
-                                (ks #,(make-syntax #`(list '#,name r) #`loc0) loc1))
-                            #`(lambda (msg loc1)
-                                ;; (set-box! *nonterminal-stack* saved)
-                                (kf msg loc1))))))))
+               ;; (define cache-entry (input-cache-ref input loc0))
+               ;; (cond
+               ;;   [(not cache-entry) (error '#,name "Cycle in ABNF grammar")]
+               ;;   [(box? cache-entry)
+                  (define loc loc0)
+                  ;; (define saved (unbox *nonterminal-stack*))
+                  ;; (set-box! *nonterminal-stack* (cons (cons '#,name loc) saved))
+                  ;; (printf "\n  ~a ~a ~a"
+                  ;;         (current-milliseconds)
+                  ;;         loc
+                  ;;         (reverse (unbox *nonterminal-stack*)))
+                  ;; (flush-output)
+                  #,(compile env ast
+                             #`(lambda (r loc1)
+                                 ;; (printf " -- yes ~a/~a=~v" '#,name loc0 (input-char input loc0))
+                                 ;; (set-box! *nonterminal-stack* saved)
+                                 (define r1 #,(make-syntax #`(list '#,name r) #`loc0))
+                                 ;; (input-cache-add! cache-entry (parse-result r1 loc1))
+                                 (ks r1 loc1))
+                             #`(lambda (msg loc1)
+                                 ;; (printf " -- no ~a/~a=~v" '#,name loc0 (input-char input loc0))
+                                 ;; (set-box! *nonterminal-stack* saved)
+                                 ;; (input-cache-add! cache-entry (parse-error msg loc1))
+                                 (kf msg loc1)))
+                 ;;  ]
+                 ;; [else
+                 ;;  (combine no-error
+                 ;;           (for/list [(item (in-list cache-entry))]
+                 ;;             (match item
+                 ;;               [(parse-error msg loc) (kf msg loc)]
+                 ;;               [(parse-result r loc) (ks r loc)])))])
+               ))))

@@ -16,7 +16,7 @@
 (define abnf-parser abnf:rulelist)
 
 (define (read-abnf src [p (current-input-port)] #:language [language #'abnf/lang])
-  (define grammar (port->bytes p))
+  (define grammar (bytes->parse-input (port->bytes p)))
   (analyze-parser-results (abnf-parser grammar)
                           grammar
                           src
@@ -31,5 +31,5 @@
                           (lambda (other)
                             (error 'read-abnf
                                    "Ambiguous ABNF grammar input!\n~v\n~v"
-                                   grammar
+                                   (parse-input-bytes grammar)
                                    (pretty-format other)))))
