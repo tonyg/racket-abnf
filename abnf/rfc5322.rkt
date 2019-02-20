@@ -281,7 +281,7 @@ path            =   angle-addr / ([CFWS] "<" [CFWS] ">" [CFWS])
 
 received        =   "Received:" *received-token ";" date-time CRLF
 
-received-token  =   word / angle-addr / addr-spec / domain
+received-token  =   word / angle-addr / addr-spec // domain
 
 optional-field  =   field-name ":" unstructured CRLF
 
