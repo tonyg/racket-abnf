@@ -28,9 +28,13 @@
        (define results-rev (gensym 'results-rev))
        (define count (gensym 'count))
        (define loop (gensym 'repetition-loop))
-       `(let ((,left-pos loc))
+       (define continue (gensym 'repetition-continue))
+       `(let ((,left-pos loc)
+              (,continue (lambda (r loc) (,ks r loc))))
           (let ,loop ((,results-rev '()) (loc loc) (,count 0))
             (define ,item-loc loc)
+            (define (,continue)
+              (,ks ,(make-syntax `(list '* (reverse ,results-rev)) left-pos) ,item-loc))
             ,(walk item
                    `(lambda (r loc)
                       (let ((,count (+ ,count 1)))
@@ -38,16 +42,13 @@
                              `(,loop (cons r ,results-rev) loc ,count)
                              `(if (<= ,count ,max)
                                   (,loop (cons r ,results-rev) loc ,count)
-                                  (,kf "too many repetitions" ,item-loc)))))
+                                  (,continue)))))
                    `(lambda (msg loc)
-                      ,(let ((continue
-                              `(,ks ,(make-syntax `(list '* (reverse ,results-rev)) left-pos)
-                                    ,item-loc)))
-                         (if (zero? min)
-                             continue
-                             `(if (< ,count ,min)
-                                  (,kf msg loc)
-                                  ,continue)))))))]
+                      ,(if (zero? min)
+                           `(,continue)
+                           `(if (< ,count ,min)
+                                (,kf msg loc)
+                                (,continue)))))))]
       [(:biased-choice items)
        (define err (gensym 'err))
        `(let ((,left-pos loc) (,err no-error))

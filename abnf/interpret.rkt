@@ -36,7 +36,7 @@
                  (let ((count (+ count 1)))
                    (if (or (not max) (<= count max))
                        (loop (cons r results-rev) loc count)
-                       (kf "too many repetitions" item-loc))))
+                       (ks (make-syntax (list '* (reverse results-rev)) left-pos) item-loc))))
                (lambda (msg loc)
                  (if (< count min)
                      (kf msg loc)
