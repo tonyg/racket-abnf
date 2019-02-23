@@ -23,6 +23,8 @@
 
 (require racket/match)
 
+(module+ test (require rackunit))
+
 (struct parse-input (bytes #;cache) #:prefab)
 (struct parse-result (value loc) #:prefab)
 (struct parse-error (message loc) #:prefab)
@@ -79,12 +81,24 @@
 (define (loc->srcloc loc input source-name)
   (local-require (only-in racket/string string-split))
   (local-require (only-in racket/list last))
-  (define lines (string-split (bytes->string/latin-1 (subbytes (parse-input-bytes input) 0 loc))
-                              "\n" #:trim? #f))
+  (define prefix (subbytes (parse-input-bytes input) 0 loc))
+  (define lines (if (zero? (bytes-length prefix))
+                    '("")
+                    (string-split (bytes->string/latin-1 prefix) "\n" #:trim? #f)))
   (define row (length lines))
-  (define last-line (if (null? lines) "" (last lines)))
+  (define last-line (last lines))
   (define col (string-length last-line))
-  (srcloc source-name (+ row 1) col (+ loc 1) #f))
+  (srcloc source-name row col (+ loc 1) #f))
+
+(module+ test
+  (let ((! (lambda (loc)
+             (loc->srcloc loc (parse-input #"abcde\r\nfghij\r\nklmno\r\n") "adhoc")))
+        (p (lambda (line column position)
+             (srcloc "adhoc" line column position #f))))
+    (check-equal? (! 0) (p 1 0 1))
+    (check-equal? (! 3) (p 1 3 4))
+    (check-equal? (! 8) (p 2 1 9)) ;; NB. Racket counts *positions* differently, yielding 2 1 8 here
+    (check-equal? (! 21) (p 4 0 22))))
 
 (define (analyze-parser-results results
                                 #:incomplete-parse-error? [incomplete-parse-error? #t]
