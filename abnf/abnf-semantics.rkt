@@ -47,8 +47,9 @@
        (:range (val base digits0) (val base digits0))]
       [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0
                                              (* ((/ 0 (* ((: "." ,digitsNs) ...)))))))
-       (:concatenation (cons (val base digits0)
-                             (map (lambda (digitsN) (val base digitsN)) digitsNs)))]
+       (:concatenation (cons (:range (val base digits0) (val base digits0))
+                             (map (lambda (digitsN) (:range (val base digitsN) (val base digitsN)))
+                                  digitsNs)))]
       [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ((/ 1 (: "-" ,digits1))))))
        (:range (val base digits0) (val base digits1))]
 
