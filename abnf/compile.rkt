@@ -14,15 +14,16 @@
 (define (make-syntax val-exp loc-exp)
   val-exp)
 
-(define (rule-id name)
-  (string->symbol (format "%%~a" name)))
+(define (symf f . args) (string->symbol (apply format f args)))
+(define (internal-rule-id name) (symf "%%~a*" name))
+(define (external-rule-id name) (symf "%%~a" name))
 
 (define (compile env ast ks kf)
   (define (walk ast ks kf)
     (define left-pos (gensym 'left-pos))
     (match ast
       [(:reference name)
-       `(,(rule-id name) input loc ,ks ,kf)]
+       `(,(internal-rule-id name) input loc ,ks ,kf)]
       [(:repetition min max item)
        (define item-loc (gensym 'item-loc))
        (define results-rev (gensym 'results-rev))
@@ -114,9 +115,14 @@
       (provide %rulelist)
       (define %rulelist '#,rulelist)
       (provide #,@(for/list [(n (in-hash-keys env))]
-                    #`(rename-out [#,(rule-id n) #,n])))
+                    #`(rename-out [#,(external-rule-id n) #,n])))
+      (provide #,@(for/list [(n (in-hash-keys env))]
+                    #`(rename-out [#,(internal-rule-id n) #,(symf "~a*" n)])))
+      #,@(for/list [(name (in-hash-keys env))]
+           #`(define (#,(external-rule-id name) input)
+               (#,(internal-rule-id name) input 0 succeed fail)))
       #,@(for/list [((name ast) (in-hash env))]
-           #`(define (#,(rule-id name) input [loc0 0] [ks succeed] [kf fail])
+           #`(define (#,(internal-rule-id name) input loc0 ks kf)
                ;; (define cache-entry (input-cache-ref input loc0))
                ;; (cond
                ;;   [(not cache-entry) (error '#,name "Cycle in ABNF grammar")]
