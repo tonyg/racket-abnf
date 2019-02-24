@@ -95,12 +95,12 @@
        `(let ((head (input-substring input loc ,count)))
           (if (and head (string-ci=? head ,ci-str))
               (,ks ,(make-syntax `head `loc) (+ loc ,count))
-              (,kf ,(format "expected ~v" ci-str) loc)))]
+              (,kf ',ast loc)))]
       [(:range lo hi)
        `(let ((head (input-byte input loc)))
           (if (and head (<= ,lo head ,hi))
               (,ks ,(make-syntax `head `loc) (+ loc 1))
-              (,kf (format "input ~a out-of-range [~a-~a]" head ,lo ,hi) loc)))]))
+              (,kf ',ast loc)))]))
   (walk ast ks kf))
 
 (define (compile-rulelist rulelist)

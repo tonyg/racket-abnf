@@ -79,15 +79,12 @@
        (define head (input-substring input loc count))
        (if (and head (string-ci=? head ci-str))
            (ks (make-syntax head loc) (advance-string loc head))
-           (kf (format "expected ~v" ci-str) loc))]
+           (kf ast loc))]
       [(:range lo hi)
        (define head (input-byte input loc))
        (if (and head (<= lo head hi))
            (ks (make-syntax head loc) (advance-byte loc head))
-           (kf (format "input ~v out-of-range [~v-~v]"
-                       (if head (integer->char head) eof)
-                       (integer->char lo)
-                       (integer->char hi)) loc))]))
+           (kf ast loc))]))
   (walk ast loc0 ks kf))
 
 (module+ main
