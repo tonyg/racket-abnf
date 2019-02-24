@@ -22,6 +22,7 @@
 ;; (define *nonterminal-stack* (box '()))
 
 (require racket/match)
+(require racket/unsafe/ops)
 
 (module+ test (require rackunit))
 
@@ -30,6 +31,8 @@
 (struct parse-error (message loc) #:prefab)
 
 (define (bytes->parse-input bs)
+  (when (not (bytes? bs))
+    (error 'bytes->parse-input "Expected bytes: got ~v" bs))
   (parse-input bs #;(make-hasheqv)))
 
 (define (merge-error e1 e2)
@@ -63,20 +66,22 @@
 ;; (define (input-cache-finalize! in key b)
 ;;   (hash-set! (parse-input-cache in) key (unbox b)))
 
-(define (input-byte in i)
-  (define bs (parse-input-bytes in))
-  (and (< i (bytes-length bs))
-       (bytes-ref bs i)))
+(define-syntax-rule (input-byte in i0)
+  (let ((bs (parse-input-bytes in))
+        (i i0))
+    (and (< i (unsafe-bytes-length bs))
+         (unsafe-bytes-ref bs i))))
 
-(define (input-char in i)
-  (define b (input-byte in i))
-  (and b (integer->char b)))
+(define-syntax-rule (input-char in i)
+  (let ((b (input-byte in i)))
+    (and b (integer->char b))))
 
-(define (input-substring in i count)
-  (define bs (parse-input-bytes in))
-  (define j (+ i count))
-  (and (<= j (bytes-length bs))
-       (bytes->string/latin-1 (subbytes bs i j))))
+(define-syntax-rule (input-substring in i0 count)
+  (let* ((bs (parse-input-bytes in))
+         (i i0)
+         (j (+ i count)))
+    (and (<= j (unsafe-bytes-length bs))
+         (bytes->string/latin-1 (subbytes bs i j)))))
 
 (define (loc->srcloc loc input source-name)
   (local-require (only-in racket/string string-split))
