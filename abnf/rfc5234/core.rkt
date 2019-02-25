@@ -6,13 +6,15 @@
 (require (only-in racket/list flatten))
 (require "../main.rkt")
 
-(define (text cst)
+(define (text cst [f (lambda (walk cst) (walk cst))])
   (list->string
    (flatten
     (traverse (lambda (walk cst)
-                (match cst
-                  [(? string? s) (string->list s)]
-                  [(? number? n) (integer->char n)]
-                  [`(,_tag ,v) (walk v)]
-                  [other (walk other)]))
+                (f (lambda (cst)
+                     (match cst
+                       [(? string? s) (string->list s)]
+                       [(? number? n) (integer->char n)]
+                       [`(,_tag ,v) (walk v)]
+                       [other (walk other)]))
+                   cst))
               cst))))
