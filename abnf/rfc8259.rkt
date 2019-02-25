@@ -1,6 +1,6 @@
 #lang abnf
 
-@require abnf/rfc5234-appendix-b
+@require abnf/rfc5234/core-rules
 
 JSON-text = ws value ws
 

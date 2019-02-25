@@ -9,7 +9,7 @@
 (require (for-template racket/match))
 (require (for-template "runtime.rkt"))
 
-(require (prefix-in : "ast.rkt"))
+(require (prefix-in : "rfc5234/ast.rkt"))
 
 (define (make-syntax val-exp loc-exp)
   val-exp)
@@ -44,11 +44,11 @@
                              `(if (<= ,count ,max)
                                   (,loop (cons r ,results-rev) loc ,count)
                                   (,continue)))))
-                   `(lambda (msg loc)
+                   `(lambda (failing-ast loc)
                       ,(if (zero? min)
                            `(,continue)
                            `(if (< ,count ,min)
-                                (,kf msg loc)
+                                (,kf failing-ast loc)
                                 (,continue)))))))]
       [(:biased-choice items)
        (define err (gensym 'err))
@@ -56,13 +56,13 @@
           ,(let loop ((items items) (index 0))
              (match items
                ['()
-                `(match ,err [(parse-error msg loc) (,kf msg loc)])]
+                `(match ,err [(parse-error failing-ast loc) (,kf failing-ast loc)])]
                [(cons item items)
                 (walk item
                       `(lambda (r loc)
                          (,ks ,(make-syntax `(list '/ ,index r) left-pos) loc))
-                      `(lambda (msg loc)
-                         (let* ((,err (merge-error ,err (parse-error msg loc)))
+                      `(lambda (failing-ast loc)
+                         (let* ((,err (merge-error ,err (parse-error failing-ast loc)))
                                 (loc ,left-pos))
                            ,(loop items (+ index 1)))))])))]
       [(:alternation items)
@@ -74,7 +74,7 @@
                                              (succeed ,(make-syntax `(list '/ ,index r) left-pos)
                                                       loc))
                                           `fail))))
-            [(list (parse-error msg loc)) (,kf msg loc)]
+            [(list (parse-error failing-ast loc)) (,kf failing-ast loc)]
             [(list e results ...) (combine e
                                            (for/list [(r (in-list results))]
                                              (match-define (parse-result value loc) r)
@@ -142,16 +142,16 @@
                                  (define r1 #,(make-syntax #`(list '#,name r) #`loc0))
                                  ;; (input-cache-add! cache-entry (parse-result r1 loc1))
                                  (ks r1 loc1))
-                             #`(lambda (msg loc1)
+                             #`(lambda (failing-ast loc1)
                                  ;; (printf " -- no ~a/~a=~v" '#,name loc0 (input-char input loc0))
                                  ;; (set-box! *nonterminal-stack* saved)
-                                 ;; (input-cache-add! cache-entry (parse-error msg loc1))
-                                 (kf msg loc1)))
+                                 ;; (input-cache-add! cache-entry (parse-error failing-ast loc1))
+                                 (kf failing-ast loc1)))
                  ;;  ]
                  ;; [else
                  ;;  (combine no-error
                  ;;           (for/list [(item (in-list cache-entry))]
                  ;;             (match item
-                 ;;               [(parse-error msg loc) (kf msg loc)]
+                 ;;               [(parse-error failing-ast loc) (kf failing-ast loc)]
                  ;;               [(parse-result r loc) (ks r loc)])))])
                ))))

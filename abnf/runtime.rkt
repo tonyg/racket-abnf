@@ -1,9 +1,10 @@
 #lang racket/base
 
-(provide (struct-out parse-input)
+(provide (struct-out exn:fail:abnf:syntax)
+         (struct-out parse-input)
          (struct-out parse-result)
          (struct-out parse-error)
-         bytes->parse-input
+         ->parse-input
          merge-error
          combine
          no-error
@@ -16,7 +17,11 @@
          input-char
          input-substring
          loc->srcloc
-         analyze-parser-results)
+         analyze-parser-results
+         traverse
+         raise-abnf-syntax-error
+         abnf-parser
+         define-abnf-parser)
 
 ;; (provide *nonterminal-stack*)
 ;; (define *nonterminal-stack* (box '()))
@@ -26,14 +31,18 @@
 
 (module+ test (require rackunit))
 
+(struct exn:fail:abnf exn:fail () #:transparent)
+(struct exn:fail:abnf:syntax exn:fail:abnf (input failing-ast loc) #:transparent)
+(struct exn:fail:abnf:ambiguity exn:fail:abnf (input outcomes) #:transparent)
+
 (struct parse-input (bytes #;cache) #:prefab)
 (struct parse-result (value loc) #:prefab)
-(struct parse-error (message loc) #:prefab)
+(struct parse-error (failing-ast loc) #:prefab)
 
-(define (bytes->parse-input bs)
-  (when (not (bytes? bs))
-    (error 'bytes->parse-input "Expected bytes: got ~v" bs))
-  (parse-input bs #;(make-hasheqv)))
+(define (->parse-input x)
+  (cond [(parse-input? x) x]
+        [(bytes? x) (parse-input x #;(make-hasheqv))]
+        [else (error '->parse-input "Expected `parse-input` or `bytes`; got ~v" x)]))
 
 (define (merge-error e1 e2)
   (if (>= (parse-error-loc e1) (parse-error-loc e2)) e1 e2))
@@ -112,8 +121,8 @@
                                       (kf "Ambiguous result"
                                           (loc->srcloc 0 input source-name)))])
   (define (handle-error e)
-    (match-define (parse-error msg loc) e)
-    (kf msg (loc->srcloc loc input source-name)))
+    (match-define (parse-error failing-ast loc) e)
+    (kf failing-ast (loc->srcloc loc input source-name)))
   (define (handle-result r)
     (match-define (parse-result cst loc) r)
     (ks cst))
@@ -126,3 +135,58 @@
          (handle-result r))]
     [other ;; ambiguous result
      (ka other)]))
+
+(define (traverse f cst)
+  (match cst
+    [`(/ ,_ ,v) (f v)]
+    [`(: ,@vs) (map f vs)]
+    [`(* ,vs) (map f vs)]
+    [`(,_tag ,v) (f v)]))
+
+(define (format-abnf-failing-ast failing-ast)
+  (local-require (prefix-in : "rfc5234/ast.rkt"))
+  (match failing-ast
+    [(:range b b)
+     (format "Expected ~v" (make-string 1 (integer->char b)))]
+    [(:range lo hi)
+     (format "Expected a byte between ~a (\"~a\") and ~a (\"~a\")"
+             lo
+             (integer->char lo)
+             hi
+             (integer->char hi))]
+    [(:char-val ci-str)
+     (format "Expected ~v (case-insensitive)" ci-str)]))
+
+(define (raise-abnf-syntax-error input failing-ast loc)
+  (raise (exn:fail:abnf:syntax
+          (format "Syntax error: ~a: ~a"
+                  (srcloc->string loc)
+                  (format-abnf-failing-ast failing-ast))
+          (current-continuation-marks)
+          input
+          failing-ast
+          loc)))
+
+(define (raise-abnf-ambiguity-error input outcomes)
+  (raise (exn:fail:abnf:ambiguity
+          "ABNF grammar is ambiguous for given input"
+          (current-continuation-marks)
+          input
+          outcomes)))
+
+(define-syntax-rule (abnf-parser parser semantic-function)
+  (lambda (input0
+           [source-name "<unknown>"]
+           #:on-ambiguity [handle-ambiguity raise-abnf-ambiguity-error])
+    (define input (->parse-input input0))
+    (analyze-parser-results (parser input)
+                            input
+                            source-name
+                            semantic-function
+                            (lambda (failing-ast loc)
+                              (raise-abnf-syntax-error input failing-ast loc))
+                            (lambda (outcomes)
+                              (raise-abnf-ambiguity-error input outcomes)))))
+
+(define-syntax-rule (define-abnf-parser id cst-module rulename semantic-function)
+  (define id (abnf-parser (let () (local-require cst-module) rulename) semantic-function)))

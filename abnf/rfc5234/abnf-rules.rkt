@@ -7,7 +7,7 @@
 ;;  - to allow @-prefixed single-line Racket forms, and
 ;;  - to add '//' as a biased-choice operator.
 
-@require "rfc5234-appendix-b.rkt"
+@require "core-rules.rkt"
 
 rulelist       =  1*( rule / meta / (*c-wsp c-nl) )
 

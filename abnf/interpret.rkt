@@ -6,7 +6,7 @@
 (require racket/match)
 (require (only-in racket/list append*))
 
-(require (prefix-in : "ast.rkt"))
+(require (prefix-in : "rfc5234/ast.rkt"))
 (require "runtime.rkt")
 
 (define (advance-string loc s) (+ loc (string-length s)))
@@ -37,21 +37,21 @@
                    (if (or (not max) (<= count max))
                        (loop (cons r results-rev) loc count)
                        (ks (make-syntax (list '* (reverse results-rev)) left-pos) item-loc))))
-               (lambda (msg loc)
+               (lambda (failing-ast loc)
                  (if (< count min)
-                     (kf msg loc)
+                     (kf failing-ast loc)
                      (ks (make-syntax (list '* (reverse results-rev)) left-pos) item-loc)))))]
       [(:biased-choice items)
        (let loop ((items items) (index 0) (e no-error))
          (match items
            ['()
-            (match e [(parse-error msg loc) (kf msg loc)])]
+            (match e [(parse-error failing-ast loc) (kf failing-ast loc)])]
            [(cons item items)
             (walk item left-pos
                   (lambda (r loc)
                     (ks (make-syntax (list '/ index r) left-pos) loc))
-                  (lambda (msg loc)
-                    (loop items (+ index 1) (merge-error e (parse-error msg loc)))))]))]
+                  (lambda (failing-ast loc)
+                    (loop items (+ index 1) (merge-error e (parse-error failing-ast loc)))))]))]
       [(:alternation items)
        (match (combine no-error
                        (for/list [(item (in-list items)) (index (in-naturals))]
@@ -59,7 +59,7 @@
                                (lambda (r loc)
                                  (succeed (make-syntax (list '/ index r) left-pos) loc))
                                fail)))
-         [(list (parse-error msg loc)) (kf msg loc)]
+         [(list (parse-error failing-ast loc)) (kf failing-ast loc)]
          [(list e results ...) (combine e
                                         (for/list [(r (in-list results))]
                                           (match-define (parse-result value loc) r)
@@ -91,7 +91,7 @@
   (require racket/file)
   (require racket/pretty)
   (require (prefix-in abnf: "genboot.rkt"))
-  (require "abnf-semantics.rkt")
+  (require "rfc5234/abnf-semantics.rkt")
   (define-values (input-bs source-name) (values
 
                                          ;; #"foo = %x20 %x20\r\n"
@@ -107,14 +107,14 @@
                                          "rfc5322.rkt"
 
                                          ))
-  (define input (bytes->parse-input input-bs))
+  (define input (parse-input input-bs))
   (analyze-parser-results ((rulelist->parser abnf:rulelist 'rulelist) input)
                           input
                           source-name
                           (lambda (cst)
                             (pretty-print (abnf-cst->ast cst)))
-                          (lambda (msg loc)
-                            (printf "SYNTAX ERROR\n~a\n~a\n" msg (srcloc->string loc)))
+                          (lambda (failing-ast loc)
+                            (printf "SYNTAX ERROR\n~a\n~a\n" failing-ast (srcloc->string loc)))
                           (lambda (other)
                             (printf "AMBIGUOUS RESULT\n")
                             (pretty-print other))))

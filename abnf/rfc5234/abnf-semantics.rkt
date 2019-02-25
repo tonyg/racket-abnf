@@ -7,14 +7,12 @@
 (require (only-in racket/port with-input-from-string port->list))
 
 (require (prefix-in : "ast.rkt"))
+(require "core.rkt")
+(require "../runtime.rkt")
 
-(define (abnf-cst->ast ast)
-  (define (walk ast)
-    (match ast
-      [`(/ ,_ ,v) (walk v)]
-      [`(: ,@vs) (map walk vs)]
-      [`(* ,vs) (map walk vs)]
-
+(define (abnf-cst->ast cst)
+  (define (walk cst)
+    (match cst
       [`(rulelist ,items) (:rulelist (flatten (walk items)))]
       [`(rule (: (rulename ,n) ,d ,e ,_)) (:rule (string->symbol (text n)) (walk d) (walk e))]
       [`(rulename ,n) (:reference (string->symbol (text n)))]
@@ -52,22 +50,9 @@
                                   digitsNs)))]
       [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ((/ 1 (: "-" ,digits1))))))
        (:range (val base digits0) (val base digits1))]
+      [other (traverse walk other)]))
 
-      [`(ALPHA (/ ,_ ,n)) (integer->char n)]
-      [`(DIGIT ,n) (integer->char n)]
-      [`(HEXDIG ,n) (walk n)]
-      [`(VCHAR ,n) (integer->char n)]
-      [`(WSP ,v) (walk v)]
-      [`(SP ,n) (integer->char n)]
-      [(? string? s) (string->list s)]
-      [(? number? n) (integer->char n)]
-      [`() '()]
-      [_ (error 'abnf-cst->ast "unhandled: ~v" ast)]))
+  (define (val base digits-cst)
+    (string->number (format "#~a~a" base (text digits-cst))))
 
-  (define (text ast)
-    (list->string (flatten (walk ast))))
-
-  (define (val base digits-ast)
-    (string->number (format "#~a~a" base (text digits-ast))))
-
-  (walk ast))
+  (walk cst))

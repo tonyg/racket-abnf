@@ -4,7 +4,7 @@
 
 (require (for-syntax racket/base syntax/kerncase))
 
-(require (prefix-in : "ast.rkt"))
+(require (prefix-in : "rfc5234/ast.rkt"))
 (require (for-syntax "compile.rkt"))
 
 (define-syntax (_define-and-provide-abnf stx)
