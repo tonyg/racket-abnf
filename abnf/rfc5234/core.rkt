@@ -9,8 +9,10 @@
 (define (text cst)
   (list->string
    (flatten
-    (let walk ((cst cst))
-      (match cst
-        [(? string? s) (string->list s)]
-        [(? number? n) (integer->char n)]
-        [other (traverse walk other)])))))
+    (traverse (lambda (walk cst)
+                (match cst
+                  [(? string? s) (string->list s)]
+                  [(? number? n) (integer->char n)]
+                  [`(,_tag ,v) (walk v)]
+                  [other (walk other)]))
+              cst))))

@@ -1,28 +1,42 @@
-#lang abnf
-;; https://tools.ietf.org/html/rfc4180
+#lang racket/base
 
-file = [header CRLF] record *(CRLF record) [CRLF]
+(provide parse-csv
+         parse-csv/header
+         parse-csv*
+         (all-from-out "rfc4180/ast.rkt"))
 
-header = name *(COMMA name)
+(require racket/match)
+(require (only-in racket/string string-replace))
+(require (prefix-in : "rfc4180/ast.rkt"))
+(require abnf)
+(require abnf/rfc5234/core)
 
-record = field *(COMMA field)
+(define ((csv-cst->ast #:header? [header? #f] #:trim-empty? [trim-empty? #t]) cst)
+  (define (make-record walk ctor v)
+    (define fields (flatten (walk v)))
+    (if (and trim-empty? (equal? fields '("")))
+        '()
+        (ctor fields)))
+  (traverse (lambda (walk cst)
+              (match cst
+                [`(file ,v) (flatten (walk v))]
+                [`(header ,v) (make-record walk (if header? :header :record) v)]
+                [`(record ,v) (make-record walk :record v)]
+                [`(name ,v) (walk v)]
+                [`(field ,v) (walk v)]
+                [`(escaped (: ,_q1 ,cs ,_q2)) (string-replace (text cs) "\"\"" "\"")]
+                [`(non-escaped ,cs) (text cs)]
+                [`(COMMA ,_) '()]
+                [`(CRLF ,_) '()]
+                ))
+            cst))
 
-name = field
+(define-abnf-parser (parse-csv* #:header? header? #:trim-empty? trim-empty?)
+  abnf/rfc4180/rules file
+  (csv-cst->ast #:header? header? #:trim-empty? trim-empty?))
 
-field = (escaped / non-escaped)
+(define (parse-csv #:trim-empty? [trim-empty? #t] input)
+  ((parse-csv* #:header? #f #:trim-empty? trim-empty?) input))
 
-escaped = DQUOTE *(TEXTDATA / COMMA / CR / LF / 2DQUOTE) DQUOTE
-
-non-escaped = *TEXTDATA
-
-COMMA = %x2C
-
-CR = %x0D ;as per section 6.1 of RFC 2234 [2]
-
-DQUOTE =  %x22 ;as per section 6.1 of RFC 2234 [2]
-
-LF = %x0A ;as per section 6.1 of RFC 2234 [2]
-
-CRLF = CR LF ;as per section 6.1 of RFC 2234 [2]
-
-TEXTDATA =  %x20-21 / %x23-2B / %x2D-7E
+(define (parse-csv/header #:trim-empty? [trim-empty? #t] input)
+  ((parse-csv* #:header? #t #:trim-empty? trim-empty?) input))

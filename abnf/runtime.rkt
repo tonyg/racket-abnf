@@ -137,11 +137,15 @@
      (ka other)]))
 
 (define (traverse f cst)
-  (match cst
-    [`(/ ,_ ,v) (f v)]
-    [`(: ,@vs) (map f vs)]
-    [`(* ,vs) (map f vs)]
-    [`(,_tag ,v) (f v)]))
+  (define (walk cst)
+    (match cst
+      [`(/ ,_ ,v) (walk v)]
+      [`(: ,@vs) (map walk vs)]
+      [`(* ,vs) (map walk vs)]
+      [`(,_tag ,_v) (f walk cst)]
+      [(? string? v) (f walk v)]
+      [(? number? v) (f walk v)]))
+  (walk cst))
 
 (define (format-abnf-failing-ast failing-ast)
   (local-require (prefix-in : "rfc5234/ast.rkt"))
