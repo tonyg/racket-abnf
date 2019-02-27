@@ -1,6 +1,8 @@
 #lang racket/base
 
-(provide (struct-out exn:fail:abnf:syntax)
+(provide (struct-out exn:fail:abnf)
+         (struct-out exn:fail:abnf:syntax)
+         (struct-out exn:fail:abnf:ambiguity)
          (struct-out parse-input)
          (struct-out parse-result)
          (struct-out parse-error)
