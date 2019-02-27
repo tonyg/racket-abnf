@@ -112,8 +112,8 @@
               `(require ,@(for/list [(s spec)] `(prefix-in %% ,s)))]
              [other
               other]))
-      (provide %rulelist)
       (define %rulelist '#,rulelist)
+      (module+ rulelist (provide %rulelist))
       (provide #,@(for/list [(n (in-hash-keys env))]
                     #`(rename-out [#,(external-rule-id n) #,n])))
       (provide #,@(for/list [(n (in-hash-keys env))]
