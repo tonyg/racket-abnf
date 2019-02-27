@@ -1,5 +1,9 @@
 #lang abnf
 ;; From https://tools.ietf.org/html/rfc5322
+;;
+;; I have replaced some `/` with `//` to avoid ambiguity, plus other
+;; small changes as described in those comments below not appearing in
+;; the RFC.
 
 @require abnf/rfc5234/core-rules
 
@@ -17,7 +21,7 @@ ccontent        =   ctext / quoted-pair / comment
 
 comment         =   "(" *([FWS] ccontent) [FWS] ")"
 
-CFWS            =   (1*([FWS] comment) [FWS]) / FWS
+CFWS            =   (1*([FWS] comment) [FWS]) // FWS
 
 atext           =   ALPHA / DIGIT /    ; Printable US-ASCII
                     "!" / "#" /        ;  characters not including
