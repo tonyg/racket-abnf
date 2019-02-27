@@ -1,5 +1,8 @@
 #lang racket/base
-;; From https://tools.ietf.org/html/rfc5234 section 4.
+;; From https://tools.ietf.org/html/rfc5234 section 4 and appendix B.
+;; Hand-translated ABNF parser AST structures corresponding to the
+;; metacircular ABNF grammar in the RFC, including the "core"
+;; productions.
 
 (provide rulelist)
 
