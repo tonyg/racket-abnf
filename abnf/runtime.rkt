@@ -180,12 +180,14 @@
           input
           outcomes)))
 
-(define-syntax-rule (abnf-parser parser semantic-function)
+(define (abnf-parser #:incomplete-parse-error? [incomplete-parse-error? #t]
+                     parser semantic-function)
   (lambda (input0
            [source-name "<unknown>"]
            #:on-ambiguity [handle-ambiguity raise-abnf-ambiguity-error])
     (define input (->parse-input input0))
     (analyze-parser-results (parser input)
+                            #:incomplete-parse-error? incomplete-parse-error?
                             input
                             source-name
                             semantic-function
