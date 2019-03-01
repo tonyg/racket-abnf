@@ -6,7 +6,7 @@
 
 (provide rulelist)
 
-(require (prefix-in : "rfc5234/ast.rkt"))
+(require (prefix-in : abnf/rfc5234/ast))
 
 (define-syntax-rule (define-references ref ...)
   (begin (define ref (:reference 'ref)) ...))

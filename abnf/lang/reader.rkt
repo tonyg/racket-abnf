@@ -9,7 +9,7 @@
 (require "../runtime.rkt")
 
 ;; (require "../interpret.rkt")
-;; (require (prefix-in boot: "../genboot.rkt"))
+;; (require (prefix-in boot: "../private/genboot-self-hosting.rkt"))
 ;; (define rulelist-parser (rulelist->parser boot:rulelist 'rulelist))
 
 (require (prefix-in abnf: "../boot.rkt"))

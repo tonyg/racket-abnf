@@ -86,35 +86,3 @@
            (ks (make-syntax head loc) (advance-byte loc head))
            (kf ast loc))]))
   (walk ast loc0 ks kf))
-
-(module+ main
-  (require racket/file)
-  (require racket/pretty)
-  (require (prefix-in abnf: "genboot.rkt"))
-  (require "rfc5234/abnf-semantics.rkt")
-  (define-values (input-bs source-name) (values
-
-                                         ;; #"foo = %x20 %x20\r\n"
-                                         ;; "adhoc"
-
-                                         ;; (file->bytes "rfc5234-section-4.rkt")
-                                         ;; "rfc5234-section-4.rkt"
-
-                                         ;; (file->bytes "rfc5234-appendix-b.rkt")
-                                         ;; "rfc5234-appendix-b.rkt"
-
-                                         (file->bytes "rfc5322.rkt")
-                                         "rfc5322.rkt"
-
-                                         ))
-  (define input (parse-input input-bs))
-  (analyze-parser-results ((rulelist->parser abnf:rulelist 'rulelist) input)
-                          input
-                          source-name
-                          (lambda (cst)
-                            (pretty-print (abnf-cst->ast cst)))
-                          (lambda (failing-ast loc)
-                            (printf "SYNTAX ERROR\n~a\n~a\n" failing-ast (srcloc->string loc)))
-                          (lambda (other)
-                            (printf "AMBIGUOUS RESULT\n")
-                            (pretty-print other))))
