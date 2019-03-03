@@ -97,7 +97,7 @@
               (,ks ,(make-syntax `head `loc) (+ loc ,count))
               (,kf ',ast loc)))]
       [(:range lo hi)
-       `(let ((head (input-byte input loc)))
+       `(let ((head (input-codepoint input loc)))
           (if (and head (<= ,lo head ,hi))
               (,ks ,(make-syntax `head `loc) (+ loc 1))
               (,kf ',ast loc)))]))

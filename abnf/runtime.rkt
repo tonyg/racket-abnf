@@ -15,7 +15,7 @@
          ;; input-cache-ref
          ;; input-cache-add!
          ;; input-cache-finalize!
-         input-byte
+         input-codepoint
          input-char
          input-substring
          loc->srcloc
@@ -30,6 +30,7 @@
 
 (require racket/match)
 (require racket/unsafe/ops)
+(require (only-in racket/vector vector-copy))
 
 (module+ test (require rackunit))
 
@@ -37,14 +38,15 @@
 (struct exn:fail:abnf:syntax exn:fail:abnf (input failing-ast loc) #:transparent)
 (struct exn:fail:abnf:ambiguity exn:fail:abnf (input outcomes) #:transparent)
 
-(struct parse-input (bytes #;cache) #:prefab)
+(struct parse-input (codepoints #;cache) #:prefab)
 (struct parse-result (value loc) #:prefab)
 (struct parse-error (failing-ast loc) #:prefab)
 
 (define (->parse-input x)
   (cond [(parse-input? x) x]
-        [(bytes? x) (parse-input x #;(make-hasheqv))]
-        [else (error '->parse-input "Expected `parse-input` or `bytes`; got ~v" x)]))
+        [(bytes? x) (parse-input (list->vector (bytes->list x)) #;(make-hasheqv))]
+        [(string? x) (parse-input (list->vector (map char->integer (string->list x))))]
+        [else (error '->parse-input "Expected `parse-input`, `string` or `bytes`; got ~v" x)]))
 
 (define (merge-error e1 e2)
   (if (>= (parse-error-loc e1) (parse-error-loc e2)) e1 e2))
@@ -77,30 +79,29 @@
 ;; (define (input-cache-finalize! in key b)
 ;;   (hash-set! (parse-input-cache in) key (unbox b)))
 
-(define-syntax-rule (input-byte in i0)
-  (let ((bs (parse-input-bytes in))
+(define-syntax-rule (input-codepoint in i0)
+  (let ((cs (parse-input-codepoints in))
         (i i0))
-    (and (< i (unsafe-bytes-length bs))
-         (unsafe-bytes-ref bs i))))
+    (and (< i (unsafe-vector-length cs))
+         (unsafe-vector-ref cs i))))
 
 (define-syntax-rule (input-char in i)
-  (let ((b (input-byte in i)))
+  (let ((b (input-codepoint in i)))
     (and b (integer->char b))))
 
 (define-syntax-rule (input-substring in i0 count)
-  (let* ((bs (parse-input-bytes in))
+  (let* ((cs (parse-input-codepoints in))
          (i i0)
          (j (+ i count)))
-    (and (<= j (unsafe-bytes-length bs))
-         (bytes->string/latin-1 (subbytes bs i j)))))
+    (and (<= j (unsafe-vector-length cs))
+         (list->string (map integer->char (vector->list (vector-copy cs i j)))))))
 
 (define (loc->srcloc loc input source-name)
   (local-require (only-in racket/string string-split))
   (local-require (only-in racket/list last))
-  (define prefix (subbytes (parse-input-bytes input) 0 loc))
-  (define lines (if (zero? (bytes-length prefix))
+  (define lines (if (zero? loc)
                     '("")
-                    (string-split (bytes->string/latin-1 prefix) "\n" #:trim? #f)))
+                    (string-split (input-substring input 0 loc) "\n" #:trim? #f)))
   (define row (length lines))
   (define last-line (last lines))
   (define col (string-length last-line))
@@ -108,7 +109,7 @@
 
 (module+ test
   (let ((! (lambda (loc)
-             (loc->srcloc loc (parse-input #"abcde\r\nfghij\r\nklmno\r\n") "adhoc")))
+             (loc->srcloc loc (->parse-input #"abcde\r\nfghij\r\nklmno\r\n") "adhoc")))
         (p (lambda (line column position)
              (srcloc "adhoc" line column position #f))))
     (check-equal? (! 0) (p 1 0 1))
@@ -131,7 +132,7 @@
   (match results
     [(list e) (handle-error e)]
     [(list e r) ;; potentially incomplete parse
-     (if (and (< (parse-result-loc r) (bytes-length (parse-input-bytes input))) ;; incomplete
+     (if (and (< (parse-result-loc r) (vector-length (parse-input-codepoints input))) ;; incomplete
               incomplete-parse-error?)
          (handle-error e)
          (handle-result r))]

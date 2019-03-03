@@ -81,7 +81,7 @@
            (ks (make-syntax head loc) (advance-string loc head))
            (kf ast loc))]
       [(:range lo hi)
-       (define head (input-byte input loc))
+       (define head (input-codepoint input loc))
        (if (and head (<= lo head hi))
            (ks (make-syntax head loc) (advance-byte loc head))
            (kf ast loc))]))
