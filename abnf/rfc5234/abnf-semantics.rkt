@@ -14,6 +14,7 @@
   (string->number (format "#~a~a" base (text digits-cst))))
 
 (define (abnf-cst->ast cst)
+  (define biased-choice? #f)
   (traverse
    (lambda (walk cst)
      (match cst
@@ -28,7 +29,7 @@
         (:biased-choice (flatten (map walk (cons c0 cs))))]
        [`(alternation (: ,c0 (* ()))) (walk c0)]
        [`(alternation (: ,c0 (* ((: ,_ "/" ,_ ,cs) ...))))
-        (:alternation (flatten (map walk (cons c0 cs))))]
+        ((if biased-choice? :biased-choice :alternation) (flatten (map walk (cons c0 cs))))]
        [`(concatenation (: ,r (* ()))) (walk r)]
        [`(concatenation ,rs) (:concatenation (flatten (walk rs)))]
        [`(repetition (: (* ()) ,e)) (walk e)]
@@ -43,7 +44,11 @@
        [`(c-nl ,_) '()]
        [`(char-val (: ,_ ,v ,_)) (:char-val (text v))]
        [`(num-val (: "%" ,v)) (walk v)]
-       [`(meta (: "@" ,v ,_)) (:meta (with-input-from-string (text v) port->list))]
+       [`(meta (: "@" ,v ,_))
+        (match (with-input-from-string (text v) port->list)
+          [`(biased-choice) (set! biased-choice? #t) '()]
+          [`(unbiased-choice) (set! biased-choice? #f) '()]
+          [other (:meta other)])]
 
        [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ())))
         (:range (val base digits0) (val base digits0))]

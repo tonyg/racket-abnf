@@ -1,6 +1,7 @@
 #lang abnf
 
 @require abnf/rfc5234/core-rules
+@biased-choice
 
 JSON-text = ws value ws
 
