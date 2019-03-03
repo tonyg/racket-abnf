@@ -36,15 +36,10 @@
    (let loop ((cs cs))
      (match cs
        [`() '()]
-       [`((char (/ 0 (unescaped (/ ,_ ,n)))) ,@cs) (cons (integer->char n) (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 0 ,_)))) ,@cs) (cons #\" (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 1 ,_)))) ,@cs) (cons #\\ (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 2 ,_)))) ,@cs) (cons #\/ (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 3 ,_)))) ,@cs) (cons #\backspace (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 4 ,_)))) ,@cs) (cons #\page (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 5 ,_)))) ,@cs) (cons #\newline (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 6 ,_)))) ,@cs) (cons #\return (loop cs))]
-       [`((char (/ 1 (: ,_backslash (/ 7 ,_)))) ,@cs) (cons #\tab (loop cs))]
+       [`((char (/ 0 (unescaped (/ ,_ ,n)))) ,@cs)
+        (cons (integer->char n) (loop cs))]
+       [`((char (/ 1 (: ,_backslash (/ ,i ,_)))) ,@cs) #:when (<= 0 i 7)
+        (cons (string-ref "\"\\/\b\f\n\r\t" i) (loop cs))]
        [`((char (/ 1 (: ,_backslash (/ 8 (: ,_u ,digits))))) ,@cs)
         (define n0 (string->number (text digits) 16))
         (cond [(leading-codepoint? n0)
