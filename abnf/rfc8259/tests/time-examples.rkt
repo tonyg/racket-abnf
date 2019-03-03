@@ -19,8 +19,8 @@
                                    "example4.json"
                                    "example5.json"
                                    "exampleN.json")))]
-    (let* ((input (file->bytes (build-path here input-file))))
+    (let* ((input (file->string (build-path here input-file))))
       (newline)
       (println input-file)
-      (pretty-print (void #;values (time (dotimes 1000 (lambda () (our:bytes->jsexpr input))))))
-      (pretty-print (void #;values (time (dotimes 1000 (lambda () (core:bytes->jsexpr input)))))))))
+      (pretty-print (void (time (dotimes 1000 (lambda () (our:string->jsexpr input))))))
+      (pretty-print (void (time (dotimes 1000 (lambda () (core:string->jsexpr input)))))))))

@@ -5,6 +5,7 @@
          traverse
          abnf-parser
          define-abnf-parser
+         convert-all-results
          flatten ;; often useful for semantic functions
          (struct-out exn:fail:abnf)
          (struct-out exn:fail:abnf:syntax)

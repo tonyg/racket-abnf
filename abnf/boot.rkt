@@ -7,13 +7,14 @@
         rulelist
         #f
         #s(repetition
+           #t
            1
            #f
            #s(alternation
               (#s(reference rule)
                #s(reference meta)
                #s(concatenation
-                  (#s(repetition 0 #f #s(reference c-wsp))
+                  (#s(repetition #t 0 #f #s(reference c-wsp))
                    #s(reference c-nl)))))))
      #s(rule
         rule
@@ -29,6 +30,7 @@
         #s(concatenation
            (#s(reference ALPHA)
             #s(repetition
+               #t
                0
                #f
                #s(alternation
@@ -39,15 +41,15 @@
         defined-as
         #f
         #s(concatenation
-           (#s(repetition 0 #f #s(reference c-wsp))
+           (#s(repetition #t 0 #f #s(reference c-wsp))
             #s(alternation (#s(char-val "=") #s(char-val "=/")))
-            #s(repetition 0 #f #s(reference c-wsp)))))
+            #s(repetition #t 0 #f #s(reference c-wsp)))))
      #s(rule
         elements
         #f
         #s(concatenation
            (#s(reference biased-choice)
-            #s(repetition 0 #f #s(reference c-wsp)))))
+            #s(repetition #t 0 #f #s(reference c-wsp)))))
      #s(rule
         c-wsp
         #f
@@ -65,6 +67,7 @@
         #s(concatenation
            (#s(alternation (#s(char-val ";") #s(char-val "#")))
             #s(repetition
+               #t
                0
                #f
                #s(alternation (#s(reference WSP) #s(reference VCHAR))))
@@ -75,12 +78,13 @@
         #s(concatenation
            (#s(reference alternation)
             #s(repetition
+               #t
                0
                #f
                #s(concatenation
-                  (#s(repetition 0 #f #s(reference c-wsp))
+                  (#s(repetition #t 0 #f #s(reference c-wsp))
                    #s(char-val "//")
-                   #s(repetition 0 #f #s(reference c-wsp))
+                   #s(repetition #t 0 #f #s(reference c-wsp))
                    #s(reference alternation)))))))
      #s(rule
         alternation
@@ -88,12 +92,13 @@
         #s(concatenation
            (#s(reference concatenation)
             #s(repetition
+               #t
                0
                #f
                #s(concatenation
-                  (#s(repetition 0 #f #s(reference c-wsp))
+                  (#s(repetition #t 0 #f #s(reference c-wsp))
                    #s(char-val "/")
-                   #s(repetition 0 #f #s(reference c-wsp))
+                   #s(repetition #t 0 #f #s(reference c-wsp))
                    #s(reference concatenation)))))))
      #s(rule
         concatenation
@@ -101,25 +106,26 @@
         #s(concatenation
            (#s(reference repetition)
             #s(repetition
+               #t
                0
                #f
                #s(concatenation
-                  (#s(repetition 1 #f #s(reference c-wsp))
+                  (#s(repetition #t 1 #f #s(reference c-wsp))
                    #s(reference repetition)))))))
      #s(rule
         repetition
         #f
         #s(concatenation
-           (#s(repetition 0 1 #s(reference repeat)) #s(reference element))))
+           (#s(repetition #t 0 1 #s(reference repeat)) #s(reference element))))
      #s(rule
         repeat
         #f
         #s(alternation
-           (#s(repetition 1 #f #s(reference DIGIT))
+           (#s(repetition #t 1 #f #s(reference DIGIT))
             #s(concatenation
-               (#s(repetition 0 #f #s(reference DIGIT))
+               (#s(repetition #t 0 #f #s(reference DIGIT))
                 #s(char-val "*")
-                #s(repetition 0 #f #s(reference DIGIT)))))))
+                #s(repetition #t 0 #f #s(reference DIGIT)))))))
      #s(rule
         element
         #f
@@ -135,18 +141,18 @@
         #f
         #s(concatenation
            (#s(char-val "(")
-            #s(repetition 0 #f #s(reference c-wsp))
+            #s(repetition #t 0 #f #s(reference c-wsp))
             #s(reference biased-choice)
-            #s(repetition 0 #f #s(reference c-wsp))
+            #s(repetition #t 0 #f #s(reference c-wsp))
             #s(char-val ")"))))
      #s(rule
         option
         #f
         #s(concatenation
            (#s(char-val "[")
-            #s(repetition 0 #f #s(reference c-wsp))
+            #s(repetition #t 0 #f #s(reference c-wsp))
             #s(reference biased-choice)
-            #s(repetition 0 #f #s(reference c-wsp))
+            #s(repetition #t 0 #f #s(reference c-wsp))
             #s(char-val "]"))))
      #s(rule
         char-val
@@ -154,6 +160,7 @@
         #s(concatenation
            (#s(reference DQUOTE)
             #s(repetition
+               #t
                0
                #f
                #s(alternation (#s(range 32 33) #s(range 35 126))))
@@ -172,64 +179,71 @@
         #f
         #s(concatenation
            (#s(char-val "b")
-            #s(repetition 1 #f #s(reference BIT))
+            #s(repetition #t 1 #f #s(reference BIT))
             #s(repetition
+               #t
                0
                1
                #s(alternation
                   (#s(repetition
+                      #t
                       1
                       #f
                       #s(concatenation
                          (#s(char-val ".")
-                          #s(repetition 1 #f #s(reference BIT)))))
+                          #s(repetition #t 1 #f #s(reference BIT)))))
                    #s(concatenation
                       (#s(char-val "-")
-                       #s(repetition 1 #f #s(reference BIT))))))))))
+                       #s(repetition #t 1 #f #s(reference BIT))))))))))
      #s(rule
         dec-val
         #f
         #s(concatenation
            (#s(char-val "d")
-            #s(repetition 1 #f #s(reference DIGIT))
+            #s(repetition #t 1 #f #s(reference DIGIT))
             #s(repetition
+               #t
                0
                1
                #s(alternation
                   (#s(repetition
+                      #t
                       1
                       #f
                       #s(concatenation
                          (#s(char-val ".")
-                          #s(repetition 1 #f #s(reference DIGIT)))))
+                          #s(repetition #t 1 #f #s(reference DIGIT)))))
                    #s(concatenation
                       (#s(char-val "-")
-                       #s(repetition 1 #f #s(reference DIGIT))))))))))
+                       #s(repetition #t 1 #f #s(reference DIGIT))))))))))
      #s(rule
         hex-val
         #f
         #s(concatenation
            (#s(char-val "x")
-            #s(repetition 1 #f #s(reference HEXDIG))
+            #s(repetition #t 1 #f #s(reference HEXDIG))
             #s(repetition
+               #t
                0
                1
                #s(alternation
                   (#s(repetition
+                      #t
                       1
                       #f
                       #s(concatenation
                          (#s(char-val ".")
-                          #s(repetition 1 #f #s(reference HEXDIG)))))
+                          #s(repetition #t 1 #f #s(reference HEXDIG)))))
                    #s(concatenation
                       (#s(char-val "-")
-                       #s(repetition 1 #f #s(reference HEXDIG))))))))))
+                       #s(repetition #t 1 #f #s(reference HEXDIG))))))))))
      #s(rule
         prose-val
         #f
         #s(concatenation
            (#s(char-val "<")
             #s(repetition
+               #t
                0
                #f
                #s(alternation (#s(range 32 61) #s(range 63 126))))
@@ -240,6 +254,7 @@
         #s(concatenation
            (#s(char-val "@")
             #s(repetition
+               #t
                0
                #f
                #s(alternation (#s(reference WSP) #s(reference VCHAR))))
@@ -269,6 +284,7 @@
         LWSP
         #f
         #s(repetition
+           #t
            0
            #f
            #s(alternation

@@ -9,6 +9,7 @@
          ->parse-input
          merge-error
          combine
+         parallel-walk
          no-error
          succeed
          fail
@@ -18,10 +19,12 @@
          input-codepoint
          input-char
          input-substring
+         input-length
          loc->srcloc
          analyze-parser-results
          traverse
          raise-abnf-syntax-error
+         convert-all-results
          abnf-parser
          define-abnf-parser)
 
@@ -58,9 +61,17 @@
         (match r
           [(? parse-error? e) (values (merge-error err e) results)]
           [(? parse-result? r) (values err (cons r results))]))))
-  (cons err results))
+  (cons err (reverse results)))
 
-(define no-error (parse-error "no error" -1))
+(define (parallel-walk rss ks kf)
+  (match (combine no-error rss)
+    [(list (parse-error failing-ast loc)) (kf failing-ast loc)]
+    [(list e results ...) (combine e
+                                   (for/list [(r (in-list results))]
+                                     (match-define (parse-result value loc) r)
+                                     (ks value loc)))]))
+
+(define no-error (parse-error '() -1))
 
 (define (succeed v l) (list no-error (parse-result v l)))
 (define (fail m l) (list (parse-error m l)))
@@ -96,6 +107,9 @@
     (and (<= j (unsafe-vector-length cs))
          (list->string (map integer->char (vector->list (vector-copy cs i j)))))))
 
+(define (input-length in)
+  (unsafe-vector-length (parse-input-codepoints in)))
+
 (define (loc->srcloc loc input source-name)
   (local-require (only-in racket/string string-split))
   (local-require (only-in racket/list last))
@@ -129,15 +143,15 @@
   (define (handle-result r)
     (match-define (parse-result cst loc) r)
     (ks cst))
-  (match results
+  (match (if incomplete-parse-error?
+             (filter (lambda (x)
+                       (or (not (parse-result? x))
+                           (= (parse-result-loc x) (input-length input))))
+                     results)
+             results)
     [(list e) (handle-error e)]
-    [(list e r) ;; potentially incomplete parse
-     (if (and (< (parse-result-loc r) (vector-length (parse-input-codepoints input))) ;; incomplete
-              incomplete-parse-error?)
-         (handle-error e)
-         (handle-result r))]
-    [other ;; ambiguous result
-     (ka other)]))
+    [(list e r) (handle-result r)]
+    [other (ka other)])) ;; ambiguous result
 
 (define (traverse f cst)
   (define (walk cst)
@@ -181,6 +195,11 @@
           input
           outcomes)))
 
+(define ((convert-all-results converter) input outcomes)
+  (map (match-lambda [(? parse-error? e) e]
+                     [(parse-result cst _loc) (converter cst)])
+       outcomes))
+
 (define (abnf-parser #:incomplete-parse-error? [incomplete-parse-error? #t]
                      parser semantic-function)
   (lambda (input0
@@ -195,7 +214,7 @@
                             (lambda (failing-ast loc)
                               (raise-abnf-syntax-error input failing-ast loc))
                             (lambda (outcomes)
-                              (raise-abnf-ambiguity-error input outcomes)))))
+                              (handle-ambiguity input outcomes)))))
 
 (define-syntax-rule (define-abnf-parser id cst-module rulename semantic-function)
   (define id (abnf-parser (let () (local-require cst-module) rulename) semantic-function)))

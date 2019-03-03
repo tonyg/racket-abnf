@@ -1,6 +1,7 @@
 #lang racket/base
 
-(provide bytes->jsexpr)
+(provide bytes->jsexpr
+         string->jsexpr)
 
 (require racket/match)
 (require abnf)
@@ -56,7 +57,5 @@
               [(trailing-codepoint? n0) (surrogate-error "Unexpected trailing codepoint" n0)]
               [else (cons (integer->char n0) (loop cs))])]))))
 
-(define-abnf-parser bytes->jsexpr
-  "rfc8259/rules.rkt"
-  JSON-text
-  cst->ast)
+(define-abnf-parser bytes->jsexpr "rfc8259/rules.rkt" JSON-text cst->ast)
+(define-abnf-parser string->jsexpr "rfc8259/rules.rkt" JSON-text cst->ast)

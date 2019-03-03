@@ -28,7 +28,7 @@
        (walk item loc
              (lambda (r loc) (ks (make-syntax (list name r) loc) loc))
              kf)]
-      [(:repetition min max item)
+      [(:repetition #t min max item)
        (let loop ((results-rev '()) (loc loc) (count 0))
          (define item-loc loc)
          (walk item item-loc
@@ -41,6 +41,26 @@
                  (if (< count min)
                      (kf failing-ast loc)
                      (ks (make-syntax (list '* (reverse results-rev)) left-pos) item-loc)))))]
+      [(:repetition #f min max item)
+       (parallel-walk
+        (list
+         (let loop ((results-rev '()) (loc loc) (count 0))
+           (define item-loc loc)
+           (define more
+             (if (or (not max) (< count max))
+                 (walk item item-loc
+                       (lambda (r loc) (loop (cons r results-rev) loc (+ count 1)))
+                       fail)
+                 (list no-error)))
+           (if (and (>= count min) (or (not max) (<= count max)))
+               (parallel-walk
+                (list more
+                      (succeed (make-syntax (list '* (reverse results-rev)) left-pos) item-loc))
+                succeed
+                fail)
+               more)))
+        ks
+        kf)]
       [(:biased-choice items)
        (let loop ((items items) (index 0) (e no-error))
          (match items
@@ -53,17 +73,13 @@
                   (lambda (failing-ast loc)
                     (loop items (+ index 1) (merge-error e (parse-error failing-ast loc)))))]))]
       [(:alternation items)
-       (match (combine no-error
-                       (for/list [(item (in-list items)) (index (in-naturals))]
+       (parallel-walk (for/list [(item (in-list items)) (index (in-naturals))]
                          (walk item left-pos
                                (lambda (r loc)
                                  (succeed (make-syntax (list '/ index r) left-pos) loc))
-                               fail)))
-         [(list (parse-error failing-ast loc)) (kf failing-ast loc)]
-         [(list e results ...) (combine e
-                                        (for/list [(r (in-list results))]
-                                          (match-define (parse-result value loc) r)
-                                          (ks value loc)))])]
+                               fail))
+                      ks
+                      kf)]
       [(:concatenation items)
        (define left-pos loc)
        (let loop ((results-rev '()) (items items) (loc loc))

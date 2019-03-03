@@ -15,6 +15,7 @@
 
 (define (abnf-cst->ast cst)
   (define biased-choice? #f)
+  (define greedy-repetition? #t)
   (traverse
    (lambda (walk cst)
      (match cst
@@ -33,13 +34,14 @@
        [`(concatenation (: ,r (* ()))) (walk r)]
        [`(concatenation ,rs) (:concatenation (flatten (walk rs)))]
        [`(repetition (: (* ()) ,e)) (walk e)]
-       [`(repetition (: (* (,r)) ,e)) (match (walk r) [(list lo hi) (:repetition lo hi (walk e))])]
+       [`(repetition (: (* (,r)) ,e))
+        (match (walk r) [(list lo hi)(:repetition greedy-repetition? lo hi (walk e))])]
        [`(repeat (/ 0 ,v)) (list (string->number (text v)) #f)]
        [`(repeat (/ 1 (: ,v "*" ,w))) (list (or (string->number (text v)) 0)
                                             (string->number (text w)))]
        [`(element ,item) (walk item)]
        [`(group (: "(" ,_ ,a ,_ ")")) (walk a)]
-       [`(option (: "[" ,_ ,a ,_ "]")) (:repetition 0 1 (walk a))]
+       [`(option (: "[" ,_ ,a ,_ "]")) (:repetition greedy-repetition? 0 1 (walk a))]
        [`(c-wsp ,_) '()]
        [`(c-nl ,_) '()]
        [`(char-val (: ,_ ,v ,_)) (:char-val (text v))]
@@ -48,6 +50,8 @@
         (match (with-input-from-string (text v) port->list)
           [`(biased-choice) (set! biased-choice? #t) '()]
           [`(unbiased-choice) (set! biased-choice? #f) '()]
+          [`(greedy-repetition) (set! greedy-repetition? #t) '()]
+          [`(non-greedy-repetition) (set! greedy-repetition? #f) '()]
           [other (:meta other)])]
 
        [`(,(or 'bin-val 'dec-val 'hex-val) (: ,base ,digits0 (* ())))

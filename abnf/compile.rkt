@@ -24,7 +24,7 @@
     (match ast
       [(:reference name)
        `(,(internal-rule-id name) input loc ,ks ,kf)]
-      [(:repetition min max item)
+      [(:repetition #t min max item)
        (define item-loc (gensym 'item-loc))
        (define results-rev (gensym 'results-rev))
        (define count (gensym 'count))
@@ -50,6 +50,36 @@
                            `(if (< ,count ,min)
                                 (,kf failing-ast loc)
                                 (,continue)))))))]
+      [(:repetition #f min max item)
+       (define item-loc (gensym 'item-loc))
+       (define results-rev (gensym 'results-rev))
+       (define count (gensym 'count))
+       (define loop (gensym 'repetition-loop))
+       `(let ((,left-pos loc))
+          (parallel-walk
+           (list
+            (let ,loop ((,results-rev '()) (loc loc) (,count 0))
+              (define ,item-loc loc)
+              ,(let ((more-exp (walk item
+                                     `(lambda (r loc) (,loop (cons r ,results-rev) loc (+ ,count 1)))
+                                     `fail)))
+                 `(let ((more ,(if (not max)
+                                   more-exp
+                                   `(if (< ,count ,max)
+                                        ,more-exp
+                                        (list no-error)))))
+                    (if ,(if (not max)
+                             `(>= ,count ,min)
+                             `(and (>= ,count ,min) (<= ,count ,max)))
+                        (parallel-walk
+                         (list more
+                               (succeed ,(make-syntax `(list '* (reverse ,results-rev)) left-pos)
+                                        ,item-loc))
+                         succeed
+                         fail)
+                        more)))))
+           (lambda (r loc) (,ks r loc))
+           (lambda (failing-ast loc) (,kf failing-ast loc))))]
       [(:biased-choice items)
        (define err (gensym 'err))
        `(let ((,left-pos loc) (,err no-error))
@@ -67,18 +97,14 @@
                            ,(loop items (+ index 1)))))])))]
       [(:alternation items)
        `(let ((,left-pos loc))
-          (match (combine no-error
-                          (list ,@(for/list [(item (in-list items)) (index (in-naturals))]
-                                    (walk item
-                                          `(lambda (r loc)
-                                             (succeed ,(make-syntax `(list '/ ,index r) left-pos)
-                                                      loc))
-                                          `fail))))
-            [(list (parse-error failing-ast loc)) (,kf failing-ast loc)]
-            [(list e results ...) (combine e
-                                           (for/list [(r (in-list results))]
-                                             (match-define (parse-result value loc) r)
-                                             (,ks value loc)))]))]
+          (parallel-walk (list ,@(for/list [(item (in-list items)) (index (in-naturals))]
+                                   (walk item
+                                         `(lambda (r loc)
+                                            (succeed ,(make-syntax `(list '/ ,index r) left-pos)
+                                                     loc))
+                                         `fail)))
+                         (lambda (r loc) (,ks r loc))
+                         (lambda (failing-ast loc) (,kf failing-ast loc))))]
       [(:concatenation items)
        `(let ((,left-pos loc))
           ,(let loop ((results-rev '()) (items items))

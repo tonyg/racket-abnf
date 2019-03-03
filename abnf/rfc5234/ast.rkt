@@ -8,7 +8,7 @@
 (struct rule (name extension? body) #:prefab)
 
 (struct reference (name) #:prefab)
-(struct repetition (min max item) #:prefab)
+(struct repetition (greedy? min max item) #:prefab)
 (struct biased-choice (items) #:prefab)
 (struct alternation (items) #:prefab)
 (struct concatenation (items) #:prefab)
