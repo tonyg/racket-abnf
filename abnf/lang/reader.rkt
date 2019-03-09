@@ -2,7 +2,7 @@
 
 (provide (rename-out [read-abnf read-syntax]))
 
-(require (only-in racket/port port->bytes))
+(require (only-in racket/port port->string))
 (require racket/pretty)
 
 (require "../rfc5234/abnf-semantics.rkt")
@@ -20,4 +20,4 @@
                              (lambda (cst)
                                #`(module abnf-module #,language
                                    (_define-and-provide-abnf #,(abnf-cst->ast cst)))))))
-    (parser (->parse-input (port->bytes p)) src)))
+    (parser (->parse-input (port->string p)) src)))
