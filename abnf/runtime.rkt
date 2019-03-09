@@ -24,6 +24,7 @@
          analyze-parser-results
          traverse
          raise-abnf-syntax-error
+         raise-abnf-ambiguity-error
          convert-all-results
          abnf-parser
          define-abnf-parser)
