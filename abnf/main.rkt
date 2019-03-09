@@ -11,6 +11,8 @@
          (struct-out exn:fail:abnf)
          (struct-out exn:fail:abnf:syntax)
          (struct-out exn:fail:abnf:ambiguity))
+(provide (all-from-out "contracts.rkt"))
 
 (require "runtime.rkt")
+(require "contracts.rkt")
 (require (only-in racket/list flatten))
