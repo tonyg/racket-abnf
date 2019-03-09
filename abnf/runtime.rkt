@@ -22,6 +22,7 @@
          input-length
          loc->srcloc
          analyze-parser-results
+         cst?
          traverse
          raise-abnf-syntax-error
          raise-abnf-ambiguity-error
@@ -153,6 +154,16 @@
     [(list e) (handle-error e)]
     [(list e r) (handle-result r)]
     [other (ka other)])) ;; ambiguous result
+
+(define (cst? x)
+  (match x
+    [(? string?) #t]                 ;; base case for `char-val`
+    [(? number?) #t]                 ;; base case for `range`
+    [`(/ ,(? number?) ,(? cst?)) #t] ;; case for `alternation` and `biased-choice`
+    [`(: ,(? cst?) ...) #t]          ;; case for `concatenation`
+    [`(* (,(? cst?) ...)) #t]        ;; case for `repetition`
+    [`(,(? symbol?) ,(? cst?)) #t]   ;; case for `reference`
+    [_ #f]))
 
 (define (traverse f cst)
   (define (walk cst)

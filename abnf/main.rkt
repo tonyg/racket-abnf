@@ -2,6 +2,7 @@
 
 (provide ->parse-input
          parse-input?
+         cst?
          traverse
          abnf-parser
          define-abnf-parser
