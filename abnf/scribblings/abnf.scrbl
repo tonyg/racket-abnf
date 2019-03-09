@@ -2,7 +2,9 @@
 
 @require[@for-label[abnf
                     racket/base
+                    racket/contract
                     racket/match]]
+@require[abnf racket/contract]
 
 @title{abnf: RFC5234-compatible ABNF #lang}
 @author[(author+email "Tony Garnock-Jones" "tonyg@leastfixedpoint.com")]
@@ -60,10 +62,12 @@ library, unlike many other parser generators, separates parsing of an
 input into two separate stages.
 
 First, a grammar given in a @tt{#lang abnf} source file translates the
-input to a @emph{concrete syntax tree} (@deftech{CST}). Second, the
-CST is interpreted by a @deftech{semantic function} to produce an
-effect, a final value, or an @emph{abstract syntax
-tree} (@deftech{AST}).
+input to a @emph{concrete syntax
+tree} (@deftech{CST}).@margin-note*{See the documentation for the
+@racket[cst?] predicate for a description of the structure of
+@tech{CST} values produced by this library.} Second, the CST is
+interpreted by a @deftech{semantic function} to produce an effect, a
+final value, or an @emph{abstract syntax tree} (@deftech{AST}).
 
 A @tech{CST} preserves almost every detail of the surface syntax of
 the input as analyzed by the rules of the grammar, including
@@ -81,11 +85,11 @@ it syntactically or to insert semantic actions.
 
 @section{Example: Arithmetic}
 
-We will use a simple language of arithmetic to introduce the use of
-the library and @tt{#lang}. We will begin by parsing the language's
-concrete syntax, move on to direct interpretation from the concrete
-syntax, and conclude by producing an @tech{AST} from the @tech{CST}
-and then interpreting the @tech{AST}.
+To get an overview of the library and @tt{#lang}, let's look at a
+simple language of arithmetic. First, we will specify the language's
+concrete syntax. Next, we will move on to direct interpretation from
+the concrete syntax. Finally, we will produce an @tech{AST} from a
+@tech{CST}, and switch to interpretation of the AST.
 
 @subsection{Grammar and concrete syntax}
 
@@ -93,7 +97,6 @@ Consider the following Racket source file, @tt{arithmetic-rules.rkt}:
 
 @grammar-snippet{
 #lang abnf
-
 expr   = term "+" expr / term "-" expr / term
 term   = factor "*" term / factor "/" term / factor
 factor = "(" expr ")" / num
@@ -108,7 +111,10 @@ A program can produce a @tech{CST} for a given input as follows:
              (define-abnf-parser parse-arithmetic/cst "arithmetic-rules.rkt" expr values)
              (parse-arithmetic/cst "10 + 20 * 30 - 40")]
 
-The @tech{CST} produced for that input is the fearsome-looking S-expression:
+Every parser resulting from @racket[define-abnf-parser] always
+produces a CST conforming to @racket[cst?] as its output. The CST
+produced for the particular parser and input given is the
+fearsome-looking S-expression:
 
 @racketresultblock['(expr (/ 0 (: (term
                                    (/ 2 (factor
@@ -149,30 +155,9 @@ recovers the input text from a given CST:
 
 @subsection{Direct interpretation}
 
-Noting that
-
-@itemlist[
-
-@item{each matched rule produces @racket[`(#,(emph "rulename")
-#,(emph "cst"))],}
-
-@item{alternatives in the grammar produce @racket[`(/ #,(emph "i")
-#,(emph "cst"))], where @emph{i} is the index of the matched
-alternative,}
-
-@item{sequences produce @racket[`(: #,(emph "cst" (subscript "1"))
-#,(emph "cst" (subscript "2")) #,(elem "..."))],}
-
-@item{repetitions produce @racket[`(* (#,(emph "cst" (subscript "1"))
-#,(emph "cst" (subscript "2")) #,(elem "...")))], and}
-
-@item{literal matches produce either a string (e.g. @racket["+"] on
-line 7) or an integer codepoint number (e.g. @racket[49] on line 4),}
-
-]
-
-we can write a direct interpreter for arithmetic @tech{CSTs} as
-follows:
+We know from the documentation of the @racket[cst?] predicate and the
+definition of our grammar above that we can write a direct interpreter
+for arithmetic CSTs as follows:
 
 @racketblock[(define (eval-cst cst)
                (match cst
@@ -235,7 +220,7 @@ We can then write an interpreter for our abstract syntax:
                  [(binop f x y) (f (eval-ast x) (eval-ast y))]
                  [(? number? n) n]))]
 
-The interpreter produces the same results as the @tech{CST}
+The interpreter produces the same results as the direct CST
 interpreter:
 
 @racketinput[(eval-ast (cst->ast (parse-arithmetic/cst "10 + 20 * 30 - 40")))]
@@ -243,13 +228,13 @@ interpreter:
 
 The combination of a semantic function with a concrete grammar is so
 common that it is included in the syntax of
-@racket[define-abnf-parser]. We can define an @tech{AST}-producing
-variant parser by supplying @racket[cst->ast] instead of
-@racket[values] to @racket[define-abnf-parser]:
+@racket[define-abnf-parser]. We can define an AST-producing variant
+parser by supplying @racket[cst->ast] instead of @racket[values] to
+@racket[define-abnf-parser]:
 
 @racketblock[(define-abnf-parser parse-arithmetic "arithmetic-rules.rkt" expr cst->ast)]
 
-Then @racket[parse-arithmetic] produces @tech{AST} values directly:
+Then @racket[parse-arithmetic] produces AST values directly:
 
 @racketinput[(parse-arithmetic "10 + 20 * 30 - 40")]
 @racketresultblock[(binop + 10 (binop - (binop * 20 30) 40))]
@@ -260,43 +245,131 @@ abnf per rfc, plus // and # and @racket[\@require] and @racket[\@biased-choice] 
 
 how imports and exports work
 
-writing compatible parsers by hand (forward reference to parser inputs and outputs)
+writing compatible parsers by hand (cross-reference to parser inputs and outputs)
 
-@section{Parser inputs and outputs}
+@section{Parser functions, their inputs, and their outputs}
 
 @declare-exporting[abnf]
 
-parser function type
+@deftogether[(
+@defthing[parser-input/c contract? #:value (or/c parse-input? bytes? string?)]
+@defthing[parser-output/c contract? #:value (cons/c parse-error? (listof parse-result?))]
+@defthing[parser-function/c contract? #:value (parser-input/c . -> . parser-output/c)]
+@defthing[parser/c contract? #:value (->* (parser-input/c)
+                                          (string?
+                                           #:on-ambiguity (-> parser-input/c parser-output/c any/c))
+                                          any/c)]
+)]{
 
-->parse-input
+An @deftech{ABNF parser function} is any function that accepts a
+@racket[parser-input/c] input, namely anything accepted by
+@racket[->parse-input], and produces an output conforming to
+@racket[parser-output/c].
 
-parse-input?
+Because working directly with the output of a parser function is
+awkward, parsers defined via @racket[abnf-parser] or
+@racket[define-abnf-parser] make use of
+@racket[analyze-parser-results] to give a simpler interface conforming
+to @racket[parser/c]: such parsers accept an input as usual, but
+return results directly for successful parses, generally raising
+exceptions for parse errors or parse ambiguities.
 
-@defproc[(cst? [maybe-cst any]) boolean?]{
-x
 }
 
-convert-all-results
+@defproc[(->parse-input [i parser-input/c]) parse-input?]{
 
-exceptions:
-         (struct-out exn:fail:abnf)
-         (struct-out exn:fail:abnf:syntax)
-         (struct-out exn:fail:abnf:ambiguity)
+Converts its argument into a form suitable for use with a parser
+function. A @racket[bytes?] input is identity-mapped, byte-for-byte,
+to a sequence of codepoints. A @racket[string?] input is taken as a
+sequence of Unicode codepoints. A @racket[parse-input?] argument is
+returned unmodified.
 
-@section{Defining parser functions}
+}
 
-@declare-exporting[abnf]
+@defproc[(abnf-parser [#:incomplete-parse-error? incomplete-parse-error? boolean? #t]
+                      [parser parser-function/c]
+                      [semantic-function (cst? . -> . any/c)])
+         parser/c]{
 
-abnf-parser
+Produces a @racket[parser/c] that, when given input, passes the input
+to @racket[parser] and analyzes the resulting @racket[parser-output/c]
+via @racket[analyze-parser-results], making use of the given
+@racket[semantic-function]. The produced @racket[parser/c] returns the
+result of @racket[analyze-parser-results].
 
-define-abnf-parser
+}
+
+@defform[(define-abnf-parser id cst-module rulename semantic-function)]{
+
+Expands to
+
+@racketblock[(define id (abnf-parser (let ()
+                                       (local-require cst-module)
+                                       rulename)
+                                     semantic-function))]
+
+}
+
+@defproc[(cst? [maybe-cst any/c]) boolean?]{
+
+The @racket[cst?] predicate recognises valid @tech{CST}s as produced
+by parsers generated by this library.
+
+The @tech{CST} resulting from a parse is an S-expression whose shape
+is constrained by the grammar driving the parse.
+
+The base-case, simplest CSTs are those resulting from literal matches.
+These are either a string, corresponding to a matched ABNF literal
+string (e.g. @tt{"literal string"}), or an integer codepoint number,
+corresponding to a matched ABNF range (e.g. @tt{%x41-5A}).
+
+All other CSTs are built recursively:
+
+@itemlist[
+
+@item{alternatives in the grammar produce @racket[`(/ #,(emph "i")
+#,(emph "cst"))], where @emph{i} is the index of the matched
+alternative;}
+
+@item{sequences produce @racket[`(: #,(emph "cst" (subscript "1"))
+#,(emph "cst" (subscript "2")) #,(elem "..."))];}
+
+@item{repetitions produce @racket[`(* (#,(emph "cst" (subscript "1"))
+#,(emph "cst" (subscript "2")) #,(elem "...")))]; and finally,}
+
+@item{each matched rule from the grammar produces
+@racket[`(#,(emph "rulename") #,(emph "cst"))].}
+
+]
+
+}
+
+@deftogether[(
+@defstruct*[(exn:fail:abnf exn:fail) () #:transparent]
+@defstruct*[(exn:fail:abnf:syntax exn:fail:abnf) ([input parse-input?] [failing-ast cst?] [loc srcloc?]) #:transparent]
+@defstruct*[(exn:fail:abnf:ambiguity exn:fail:abnf) ([input parse-input?] [outcomes parser-output/c]) #:transparent]
+)]{
+
+These exceptions are signalled by parsers resulting from @racket[abnf-parser] or @racket[define-abnf-parser].
+
+An instance of @racket[exn:fail:abnf:syntax] is raised when a parser
+cannot produce a complete and valid parse of a given input.
+
+An instance of @racket[exn:fail:abnf:ambiguity] is raised when a
+parser produces more than one complete and valid parse of a given
+input.
+
+The structure type @racket[exn:fail:abnf] serves merely as a
+convenient supertype for blanket parse-exception handling.
+
+}
 
 @section{Traversing concrete syntax values}
 
 @declare-exporting[abnf]
 
-@defproc[(traverse [f ((cst? . -> . any) (or/c cst? string? number?) . -> . any)]
-                   [cst cst?]) any]{
+@defproc[(traverse [f ((cst? . -> . any/c) (or/c cst? string? number?) . -> . any/c)]
+                   [cst cst?]) any/c]{
 
 When writing semantic functions, one often wishes to concentrate on
 interpreting the results of matched rules, treating alternation,
@@ -392,10 +465,68 @@ rules @tt{bool} and @tt{bools}.
 
 @defmodule[abnf/runtime]
 
-         (struct-out parse-input)
-         (struct-out parse-result)
-         (struct-out parse-error)
+@defstruct*[parse-input ([codepoints (vectorof exact-nonnegative-integer?)])]{
 
-         analyze-parser-results
-         raise-abnf-syntax-error
-         raise-abnf-ambiguity-error
+Internal structure for use in parsing. Contains a @racket[vector] of
+codepoint integers, which are interpreted as unicode code points when
+compared against ABNF literal strings, and as plain integers when
+compared against ABNF ranges.
+
+}
+
+@defstruct*[parse-result ([value cst?] [loc exact-nonnegative-integer?])]{
+
+Represents a successful partial parse of a portion of the input. The
+@racket[value] is the resulting @tech{CST}, and the @racket[loc] is the
+position in the parsed input immediately following this successful
+parse.
+
+}
+
+@defstruct*[parse-error ([failing-ast any/c] [loc exact-nonnegative-integer?])]{
+
+Represents a parse error. The @racket[failing-ast] is an ABNF-specific
+indicator of which portion of the grammar failed to match, and the
+@racket[loc] is the position in the input where the error occurred.
+
+}
+
+@defproc[(analyze-parser-results [results parser-output/c]
+                                 [#:incomplete-parse-error? incomplete-parse-error? boolean? #t]
+                                 [input parse-input?]
+                                 [source-name string?]
+                                 [ks (cst? . -> . any/c)]
+                                 [kf (any/c srcloc? . -> . any/c)]
+                                 [ka (parser-output/c . -> . any/c)
+                                     (lambda (rs)
+                                       (kf "Ambiguous result"
+                                           (loc->srcloc 0 input source-name)))])
+         any/c]{
+
+TODO
+
+}
+
+@deftogether[(
+@defproc[(raise-abnf-syntax-error [input parse-input?]
+                                  [failing-ast any/c]
+                                  [loc srcloc?])
+         any/c]
+@defproc[(raise-abnf-ambiguity-error [input parse-input?]
+                                     [outcomes parser-output/c])
+         any/c]
+)]{
+
+Utilities used primarily with @racket[analyze-parser-results] to
+signal @racket[exn:fail:abnf:syntax] and
+@racket[exn:fail:abnf:ambiguity] errors, respectively.
+
+}
+
+@defproc[(convert-all-results [f (cst? . -> . any/c)]) (input outcomes . -> . (listof any/c))]{
+
+Applies @racket[f] to each @racket[parse-result?] in the
+@racket[outcomes], but passes through each @racket[parse-error?]
+unmodified.
+
+}
