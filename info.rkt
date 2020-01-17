@@ -1,4 +1,4 @@
 #lang info
 (define collection 'multi)
 (define deps '("base"))
-(define build-deps '("scribble-lib" "racket-doc"))
+(define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
